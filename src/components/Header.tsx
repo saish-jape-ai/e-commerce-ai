@@ -1,0 +1,245 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Search, ShoppingBag, Heart, User, Menu, X, ChevronDown } from 'lucide-react';
+import { useCart } from '@/context/CartContext';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const megaMenuData = {
+  Men: {
+    Topwear: ['T-Shirts', 'Shirts', 'Jackets', 'Sweatshirts'],
+    Bottomwear: ['Jeans', 'Trousers', 'Joggers', 'Shorts'],
+    Footwear: ['Sneakers', 'Formal Shoes', 'Sports Shoes', 'Sandals'],
+    Accessories: ['Watches', 'Sunglasses', 'Bags', 'Belts'],
+  },
+  Women: {
+    Topwear: ['Tops', 'Dresses', 'Kurtas', 'Jackets'],
+    Bottomwear: ['Jeans', 'Palazzos', 'Skirts', 'Leggings'],
+    Footwear: ['Heels', 'Flats', 'Sneakers', 'Boots'],
+    Accessories: ['Handbags', 'Jewelry', 'Scarves', 'Sunglasses'],
+  },
+  Kids: {
+    Boys: ['T-Shirts', 'Jeans', 'Shorts', 'Shoes'],
+    Girls: ['Dresses', 'Tops', 'Skirts', 'Shoes'],
+    Infants: ['Rompers', 'Sets', 'Bodysuits'],
+  },
+  Beauty: {
+    Makeup: ['Lipstick', 'Foundation', 'Mascara', 'Eyeshadow'],
+    Skincare: ['Moisturizer', 'Serum', 'Sunscreen', 'Cleanser'],
+    Haircare: ['Shampoo', 'Conditioner', 'Hair Oil', 'Masks'],
+  },
+};
+
+type MenuKey = keyof typeof megaMenuData;
+
+const Header = () => {
+  const { totalItems, wishlist } = useCart();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  return (
+    <>
+      {/* Top banner */}
+      <div className="bg-fashion-coral text-primary-foreground text-center text-xs py-1.5 font-body font-medium tracking-wide">
+        FREE SHIPPING on orders above ₹999 | Use code: <span className="font-bold">STYLE25</span>
+      </div>
+
+      <header className={`sticky top-0 z-50 transition-all duration-300 bg-background ${isScrolled ? 'shadow-md' : 'border-b border-border'}`}>
+        <div className="container mx-auto">
+          <div className="flex items-center justify-between h-16">
+            {/* Mobile menu */}
+            <button className="lg:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
+              {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+
+            {/* Logo */}
+            <Link to="/" className="font-display text-2xl font-bold tracking-tight text-foreground">
+              STYLORA
+            </Link>
+
+            {/* Desktop Nav */}
+            <nav className="hidden lg:flex items-center gap-1 h-full">
+              {(Object.keys(megaMenuData) as MenuKey[]).map(key => (
+                <div
+                  key={key}
+                  className="relative h-full flex items-center"
+                  onMouseEnter={() => setActiveMenu(key)}
+                  onMouseLeave={() => setActiveMenu(null)}
+                >
+                  <button className={`px-4 py-2 text-sm font-semibold font-body tracking-wide uppercase transition-colors hover:text-primary ${activeMenu === key ? 'text-primary border-b-2 border-primary' : 'text-foreground'}`}>
+                    {key}
+                  </button>
+                </div>
+              ))}
+              <Link to="/products" className="px-4 py-2 text-sm font-semibold font-body tracking-wide uppercase text-fashion-coral hover:opacity-80 transition-opacity">
+                Sale
+              </Link>
+            </nav>
+
+            {/* Right actions */}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setSearchOpen(true)} className="p-2 hover:bg-muted rounded-full transition-colors">
+                <Search size={20} />
+              </button>
+              <Link to="/wishlist" className="p-2 hover:bg-muted rounded-full transition-colors relative">
+                <Heart size={20} />
+                {wishlist.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-primary text-primary-foreground text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {wishlist.length}
+                  </span>
+                )}
+              </Link>
+              <Link to="/cart" className="p-2 hover:bg-muted rounded-full transition-colors relative">
+                <ShoppingBag size={20} />
+                {totalItems > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-primary text-primary-foreground text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {totalItems}
+                  </span>
+                )}
+              </Link>
+              <Link to="/profile" className="p-2 hover:bg-muted rounded-full transition-colors hidden sm:flex">
+                <User size={20} />
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Mega Menu */}
+        <AnimatePresence>
+          {activeMenu && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.2 }}
+              className="absolute left-0 right-0 bg-background border-t border-border shadow-lg z-50"
+              onMouseEnter={() => setActiveMenu(activeMenu)}
+              onMouseLeave={() => setActiveMenu(null)}
+            >
+              <div className="container mx-auto py-8 px-8">
+                <div className="grid grid-cols-4 gap-8">
+                  {Object.entries(megaMenuData[activeMenu]).map(([subcat, items]) => (
+                    <div key={subcat}>
+                      <h3 className="text-sm font-bold text-primary uppercase mb-3 font-body">{subcat}</h3>
+                      <ul className="space-y-2">
+                        {items.map(item => (
+                          <li key={item}>
+                            <Link
+                              to={`/products?category=${item.toLowerCase()}`}
+                              className="text-sm text-muted-foreground hover:text-primary transition-colors font-body"
+                              onClick={() => setActiveMenu(null)}
+                            >
+                              {item}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Search Overlay */}
+        <AnimatePresence>
+          {searchOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-foreground/50 z-50 flex items-start justify-center pt-20"
+              onClick={() => setSearchOpen(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="bg-background rounded-lg p-6 w-full max-w-2xl mx-4 shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-3 border-b border-border pb-4">
+                  <Search size={22} className="text-muted-foreground" />
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Search for products, brands and more..."
+                    className="flex-1 text-lg outline-none bg-transparent font-body"
+                  />
+                  <button onClick={() => setSearchOpen(false)}>
+                    <X size={22} />
+                  </button>
+                </div>
+                <div className="pt-4">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3">Trending Searches</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['Dresses', 'Sneakers', 'Kurtas', 'Jackets', 'T-Shirts', 'Jeans'].map(tag => (
+                      <Link
+                        key={tag}
+                        to={`/products?search=${tag.toLowerCase()}`}
+                        className="px-3 py-1.5 bg-muted rounded-full text-sm text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors font-body"
+                        onClick={() => setSearchOpen(false)}
+                      >
+                        {tag}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </header>
+
+      {/* Mobile menu drawer */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'tween' }}
+            className="fixed inset-y-0 left-0 w-80 bg-background z-50 shadow-2xl overflow-y-auto lg:hidden"
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-8">
+                <span className="font-display text-xl font-bold">STYLORA</span>
+                <button onClick={() => setMobileOpen(false)}><X size={22} /></button>
+              </div>
+              {(Object.keys(megaMenuData) as MenuKey[]).map(key => (
+                <div key={key} className="mb-4">
+                  <p className="text-sm font-bold uppercase text-primary mb-2 font-body">{key}</p>
+                  {Object.entries(megaMenuData[key]).map(([subcat, items]) => (
+                    <div key={subcat} className="ml-2 mb-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">{subcat}</p>
+                      {items.map(item => (
+                        <Link
+                          key={item}
+                          to={`/products?category=${item.toLowerCase()}`}
+                          className="block py-1 text-sm text-foreground hover:text-primary font-body"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          {item}
+                        </Link>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+};
+
+export default Header;
