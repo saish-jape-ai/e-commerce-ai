@@ -103,12 +103,12 @@ const CartPage = () => {
               </div>
             </div>
 
-            <button
-              onClick={() => toast.success('Checkout feature coming soon!')}
-              className="w-full mt-6 fashion-gradient text-primary-foreground py-3.5 rounded-lg font-semibold text-sm font-body hover:opacity-90 transition-opacity"
+            <Link
+              to="/checkout"
+              className="block w-full mt-6 fashion-gradient text-primary-foreground py-3.5 rounded-lg font-semibold text-sm font-body hover:opacity-90 transition-opacity text-center"
             >
-              Place Order
-            </button>
+              Proceed to Checkout
+            </Link>
           </div>
         </div>
       </div>

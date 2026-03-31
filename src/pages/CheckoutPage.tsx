@@ -1,0 +1,224 @@
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { MapPin, CreditCard, Truck, Shield, ChevronRight, Plus, Check } from 'lucide-react';
+import { useCart } from '@/context/CartContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+
+const savedAddresses = [
+  { id: '1', name: 'Rahul Sharma', phone: '+91 98765 43210', line1: '42, Park Street', line2: 'Sector 15, Gurugram', city: 'Gurugram', state: 'Haryana', pin: '122001', type: 'Home' },
+  { id: '2', name: 'Rahul Sharma', phone: '+91 98765 43210', line1: 'Office 204, Tower B', line2: 'Cyber City, DLF Phase 2', city: 'Gurugram', state: 'Haryana', pin: '122002', type: 'Work' },
+];
+
+const paymentMethods = [
+  { id: 'upi', label: 'UPI', desc: 'Google Pay, PhonePe, Paytm', icon: '📱' },
+  { id: 'card', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay', icon: '💳' },
+  { id: 'cod', label: 'Cash on Delivery', desc: 'Pay when you receive', icon: '💵' },
+  { id: 'wallet', label: 'Wallet', desc: 'Paytm, Amazon Pay', icon: '👛' },
+];
+
+const CheckoutPage = () => {
+  const navigate = useNavigate();
+  const { items, totalPrice, clearCart } = useCart();
+  const [step, setStep] = useState(1);
+  const [selectedAddress, setSelectedAddress] = useState(savedAddresses[0].id);
+  const [selectedPayment, setSelectedPayment] = useState('upi');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const discount = Math.round(totalPrice * 0.1);
+  const deliveryFee = totalPrice > 999 ? 0 : 99;
+  const finalTotal = totalPrice - discount + deliveryFee;
+
+  if (items.length === 0) {
+    return (
+      <div className="container mx-auto py-20 text-center">
+        <h1 className="text-2xl font-display font-bold text-foreground mb-4">No items to checkout</h1>
+        <Link to="/products" className="text-primary font-semibold font-body hover:underline">Continue Shopping</Link>
+      </div>
+    );
+  }
+
+  const handlePlaceOrder = () => {
+    setIsProcessing(true);
+    setTimeout(() => {
+      clearCart();
+      navigate('/order-success');
+    }, 2500);
+  };
+
+  const steps = [
+    { num: 1, label: 'Address', icon: MapPin },
+    { num: 2, label: 'Payment', icon: CreditCard },
+    { num: 3, label: 'Review', icon: Check },
+  ];
+
+  return (
+    <div className="container mx-auto py-6 px-4">
+      {/* Progress Steps */}
+      <div className="flex items-center justify-center gap-0 mb-8 max-w-lg mx-auto">
+        {steps.map((s, i) => (
+          <div key={s.num} className="flex items-center">
+            <motion.div
+              animate={{ scale: step >= s.num ? 1 : 0.9 }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold font-body transition-colors ${
+                step >= s.num ? 'fashion-gradient text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <s.icon size={16} />
+              <span className="hidden sm:inline">{s.label}</span>
+            </motion.div>
+            {i < steps.length - 1 && <div className={`w-8 sm:w-16 h-0.5 transition-colors ${step > s.num ? 'bg-primary' : 'bg-border'}`} />}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-8 max-w-5xl mx-auto">
+        {/* Main Content */}
+        <div className="flex-1">
+          <AnimatePresence mode="wait">
+            {step === 1 && (
+              <motion.div key="address" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+                <h2 className="text-xl font-display font-bold text-foreground mb-4">Select Delivery Address</h2>
+                <div className="space-y-3">
+                  {savedAddresses.map(addr => (
+                    <label
+                      key={addr.id}
+                      className={`block border rounded-xl p-4 cursor-pointer transition-colors ${
+                        selectedAddress === addr.id ? 'border-primary bg-fashion-blush' : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input type="radio" name="address" checked={selectedAddress === addr.id} onChange={() => setSelectedAddress(addr.id)} className="accent-primary mt-1" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-foreground font-body text-sm">{addr.name}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground px-2 py-0.5 rounded font-body">{addr.type}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1 font-body">{addr.line1}, {addr.line2}</p>
+                          <p className="text-sm text-muted-foreground font-body">{addr.city}, {addr.state} - {addr.pin}</p>
+                          <p className="text-sm text-muted-foreground mt-1 font-body">Phone: {addr.phone}</p>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                  <button className="w-full border-2 border-dashed border-border rounded-xl p-4 text-sm text-primary font-semibold font-body hover:border-primary hover:bg-fashion-blush transition-colors flex items-center justify-center gap-2">
+                    <Plus size={16} /> Add New Address
+                  </button>
+                </div>
+                <button onClick={() => setStep(2)} className="w-full mt-6 fashion-gradient text-primary-foreground py-3.5 rounded-xl font-semibold text-sm font-body hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                  Continue to Payment <ChevronRight size={16} />
+                </button>
+              </motion.div>
+            )}
+
+            {step === 2 && (
+              <motion.div key="payment" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+                <h2 className="text-xl font-display font-bold text-foreground mb-4">Payment Method</h2>
+                <div className="space-y-3">
+                  {paymentMethods.map(pm => (
+                    <label
+                      key={pm.id}
+                      className={`flex items-center gap-4 border rounded-xl p-4 cursor-pointer transition-colors ${
+                        selectedPayment === pm.id ? 'border-primary bg-fashion-blush' : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <input type="radio" name="payment" checked={selectedPayment === pm.id} onChange={() => setSelectedPayment(pm.id)} className="accent-primary" />
+                      <span className="text-2xl">{pm.icon}</span>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground font-body">{pm.label}</p>
+                        <p className="text-xs text-muted-foreground font-body">{pm.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                {selectedPayment === 'card' && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 space-y-3 border border-border rounded-xl p-4">
+                    <input placeholder="Card Number" className="w-full px-4 py-3 border border-border rounded-lg text-sm font-body bg-background outline-none focus:border-primary transition-colors" />
+                    <div className="flex gap-3">
+                      <input placeholder="MM/YY" className="flex-1 px-4 py-3 border border-border rounded-lg text-sm font-body bg-background outline-none focus:border-primary transition-colors" />
+                      <input placeholder="CVV" className="w-24 px-4 py-3 border border-border rounded-lg text-sm font-body bg-background outline-none focus:border-primary transition-colors" />
+                    </div>
+                    <input placeholder="Name on Card" className="w-full px-4 py-3 border border-border rounded-lg text-sm font-body bg-background outline-none focus:border-primary transition-colors" />
+                  </motion.div>
+                )}
+
+                <div className="flex gap-3 mt-6">
+                  <button onClick={() => setStep(1)} className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold font-body hover:bg-muted transition-colors">Back</button>
+                  <button onClick={() => setStep(3)} className="flex-1 fashion-gradient text-primary-foreground py-3.5 rounded-xl font-semibold text-sm font-body hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                    Review Order <ChevronRight size={16} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 3 && (
+              <motion.div key="review" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+                <h2 className="text-xl font-display font-bold text-foreground mb-4">Review Your Order</h2>
+
+                {/* Delivery info */}
+                <div className="border border-border rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Truck size={16} className="text-primary" />
+                    <span className="text-sm font-semibold text-foreground font-body">Estimated Delivery</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground font-body">3-5 business days | Free delivery on orders above ₹999</p>
+                </div>
+
+                {/* Items preview */}
+                <div className="space-y-3">
+                  {items.map(item => (
+                    <div key={item.product.id} className="flex gap-3 border border-border rounded-xl p-3">
+                      <img src={item.product.image} alt={item.product.name} className="w-16 h-20 object-cover rounded-lg" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground line-clamp-1 font-body">{item.product.name}</p>
+                        <p className="text-xs text-muted-foreground font-body">{item.size} | {item.color} | Qty: {item.quantity}</p>
+                        <p className="text-sm font-bold text-foreground mt-1 font-body">₹{(item.product.price * item.quantity).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 mt-4 p-3 bg-fashion-blush rounded-xl">
+                  <Shield size={16} className="text-primary" />
+                  <p className="text-xs text-foreground font-body">Your payment information is secure and encrypted</p>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button onClick={() => setStep(2)} className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold font-body hover:bg-muted transition-colors">Back</button>
+                  <motion.button
+                    onClick={handlePlaceOrder}
+                    disabled={isProcessing}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex-1 fashion-gradient text-primary-foreground py-3.5 rounded-xl font-semibold text-sm font-body hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {isProcessing ? (
+                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" />
+                    ) : (
+                      <>Place Order — ₹{finalTotal.toLocaleString()}</>
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Order Summary Sidebar */}
+        <div className="lg:w-72 shrink-0">
+          <div className="border border-border rounded-xl p-5 bg-card sticky top-24">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-4 font-body">Order Summary</h3>
+            <div className="space-y-2 text-sm font-body">
+              <div className="flex justify-between"><span className="text-muted-foreground">Items ({items.length})</span><span>₹{totalPrice.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-green-600">-₹{discount.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span className={deliveryFee === 0 ? 'text-green-600' : ''}>{deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span></div>
+              <div className="border-t border-border pt-2 flex justify-between font-bold text-base"><span>Total</span><span>₹{finalTotal.toLocaleString()}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CheckoutPage;

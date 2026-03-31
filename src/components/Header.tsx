@@ -85,9 +85,9 @@ const Header = () => {
 
             {/* Right actions */}
             <div className="flex items-center gap-2">
-              <button onClick={() => setSearchOpen(true)} className="p-2 hover:bg-muted rounded-full transition-colors">
+              <Link to="/search" className="p-2 hover:bg-muted rounded-full transition-colors">
                 <Search size={20} />
-              </button>
+              </Link>
               <Link to="/wishlist" className="p-2 hover:bg-muted rounded-full transition-colors relative">
                 <Heart size={20} />
                 {wishlist.length > 0 && (
