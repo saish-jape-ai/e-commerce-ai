@@ -3,6 +3,7 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import Layout from "@/components/Layout";
 import Page from "@/components/Page";
 import ScrollToTop from "@/components/ScrollToTop";
+import NormalizePath from "@/components/NormalizePath";
 import AboutPage from "@/pages/AboutPage";
 import CartPage from "@/pages/CartPage";
 import CheckoutPage from "@/pages/CheckoutPage";
@@ -28,6 +29,7 @@ const AppRoutes = () => {
 
   return (
     <>
+      <NormalizePath />
       <ScrollToTop />
       <Layout>
         <AnimatePresence mode="wait" initial={false}>
