@@ -16,10 +16,11 @@ const sortOptions = [
 ];
 
 const genderFilters = ['All', 'Men', 'Women', 'Kids', 'Unisex'];
-const categoryFilters = ['All', 'Topwear', 'Bottomwear', 'Footwear', 'Accessories', 'Ethnic'];
+const categoryFilters = ['All', 'Topwear', 'Bottomwear', 'Footwear', 'Accessories', 'Ethnic', 'Beauty'];
 
 const ProductsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const searchString = searchParams.toString();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortBy, setSortBy] = useState('recommended');
   const [selectedGender, setSelectedGender] = useState('All');
@@ -28,24 +29,56 @@ const ProductsPage = () => {
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
   const [query, setQuery] = useState('');
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
-  const hydratedFromUrlRef = useRef(false);
+  const skipNextUrlSyncRef = useRef(true);
+
+  const areSearchParamsEqual = (a: URLSearchParams, b: URLSearchParams) => {
+    const aEntries = Array.from(a.entries()).sort(([ak, av], [bk, bv]) =>
+      ak === bk ? av.localeCompare(bv) : ak.localeCompare(bk)
+    );
+    const bEntries = Array.from(b.entries()).sort(([ak, av], [bk, bv]) =>
+      ak === bk ? av.localeCompare(bv) : ak.localeCompare(bk)
+    );
+    if (aEntries.length !== bEntries.length) return false;
+    for (let i = 0; i < aEntries.length; i++) {
+      if (aEntries[i][0] !== bEntries[i][0] || aEntries[i][1] !== bEntries[i][1]) return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     setRecentlyViewedIds(getRecentlyViewedIds());
   }, []);
 
   useEffect(() => {
-    const genderParam = (searchParams.get('gender') || '').trim();
-    const categoryParam = (searchParams.get('category') || '').trim();
-    const subcategoryParam = (searchParams.get('sub') || '').trim();
-    const qParam = (searchParams.get('q') || '').trim();
-    const sortParam = (searchParams.get('sort') || '').trim();
-    const hasMin = searchParams.has('min');
-    const hasMax = searchParams.has('max');
-    const minParam = hasMin ? Number(searchParams.get('min')) : 0;
-    const maxParam = hasMax ? Number(searchParams.get('max')) : 10000;
+    // We are applying state based on URL params; skip the URL-sync effect once so it
+    // doesn't write stale default state back into the URL in the same effect flush.
+    skipNextUrlSyncRef.current = true;
 
-    const normalizedGender = genderFilters.find(g => g.toLowerCase() === genderParam.toLowerCase()) || 'All';
+    const params = new URLSearchParams(searchString);
+
+    const genderParam = (params.get('gender') || '').trim();
+    const categoryParam = (params.get('category') || '').trim();
+    const subcategoryParam = (params.get('sub') || '').trim();
+    const qParam = (params.get('q') || '').trim();
+    const sortParam = (params.get('sort') || '').trim();
+    const hasMin = params.has('min');
+    const hasMax = params.has('max');
+    const minParam = hasMin ? Number(params.get('min')) : 0;
+    const maxParam = hasMax ? Number(params.get('max')) : 10000;
+
+    const slugToGender: Record<string, string> = { men: 'Men', women: 'Women', kids: 'Kids', unisex: 'Unisex' };
+    const slugToCategory: Record<string, string> = {
+      topwear: 'Topwear',
+      bottomwear: 'Bottomwear',
+      footwear: 'Footwear',
+      accessories: 'Accessories',
+      ethnic: 'Ethnic',
+      beauty: 'Beauty',
+    };
+
+    const normalizedGender =
+      genderFilters.find(g => g.toLowerCase() === genderParam.toLowerCase()) ||
+      (slugToGender[categoryParam.toLowerCase()] ?? 'All');
 
     const allSubcategories = Object.values(subcategoryMap).flat();
     const subToCategory = new Map<string, string>();
@@ -61,6 +94,7 @@ const ProductsPage = () => {
     const normalizedCategory =
       inferredCategory ||
       categoryFilters.find(c => c.toLowerCase() === categoryParam.toLowerCase()) ||
+      (slugToCategory[categoryParam.toLowerCase()] ?? undefined) ||
       'All';
 
     const normalizedSubcategory = subFromSubParam || subFromCategoryParam || 'All';
@@ -78,13 +112,14 @@ const ProductsPage = () => {
       Number.isFinite(maxParam) ? maxParam : 10000,
     ];
     if (priceRange[0] !== nextPriceRange[0] || priceRange[1] !== nextPriceRange[1]) setPriceRange(nextPriceRange);
-
-    hydratedFromUrlRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchString]);
 
   useEffect(() => {
-    if (!hydratedFromUrlRef.current) return;
+    if (skipNextUrlSyncRef.current) {
+      skipNextUrlSyncRef.current = false;
+      return;
+    }
 
     const next = new URLSearchParams();
     if (query) next.set('q', query);
@@ -95,8 +130,9 @@ const ProductsPage = () => {
     if (priceRange[0] !== 0) next.set('min', String(priceRange[0]));
     if (priceRange[1] !== 10000) next.set('max', String(priceRange[1]));
 
-    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [query, sortBy, selectedGender, selectedCategory, selectedSubcategory, priceRange, searchParams, setSearchParams]);
+    const current = new URLSearchParams(searchString);
+    if (!areSearchParamsEqual(next, current)) setSearchParams(next, { replace: true });
+  }, [query, sortBy, selectedGender, selectedCategory, selectedSubcategory, priceRange, searchString, setSearchParams]);
 
   const onClearAll = () => {
     setSortBy('recommended');

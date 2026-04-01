@@ -33,6 +33,16 @@ const megaMenuData = {
 
 type MenuKey = keyof typeof megaMenuData;
 
+const buildProductsLink = (input: { gender?: string; category?: string; sub?: string; q?: string }) => {
+  const params = new URLSearchParams();
+  if (input.q) params.set('q', input.q);
+  if (input.gender) params.set('gender', input.gender.toLowerCase());
+  if (input.category) params.set('category', input.category);
+  if (input.sub) params.set('sub', input.sub);
+  const qs = params.toString();
+  return qs ? `/products?${qs}` : '/products';
+};
+
 const Header = () => {
   const { totalItems, wishlist } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
@@ -223,7 +233,11 @@ const Header = () => {
                         {items.map(item => (
                           <li key={item}>
                             <Link
-                              to={`/products?category=${item.toLowerCase()}`}
+                              to={buildProductsLink({
+                                gender: ['Men', 'Women', 'Kids'].includes(activeMenu) ? activeMenu : undefined,
+                                category: activeMenu === 'Beauty' ? 'Beauty' : subcat,
+                                sub: item,
+                              })}
                               className="text-sm text-muted-foreground hover:text-primary transition-colors font-body"
                               onClick={() => setActiveMenu(null)}
                             >
@@ -275,7 +289,7 @@ const Header = () => {
                     {['Dresses', 'Sneakers', 'Kurtas', 'Jackets', 'T-Shirts', 'Jeans'].map(tag => (
                       <Link
                         key={tag}
-                        to={`/products?search=${tag.toLowerCase()}`}
+                        to={buildProductsLink({ q: tag })}
                         className="px-3 py-1.5 bg-muted rounded-full text-sm text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors font-body"
                         onClick={() => setSearchOpen(false)}
                       >
@@ -314,7 +328,11 @@ const Header = () => {
                       {items.map(item => (
                         <Link
                           key={item}
-                          to={`/products?category=${item.toLowerCase()}`}
+                          to={buildProductsLink({
+                            gender: ['Men', 'Women', 'Kids'].includes(key) ? key : undefined,
+                            category: key === 'Beauty' ? 'Beauty' : subcat,
+                            sub: item,
+                          })}
                           className="block py-1 text-sm text-foreground hover:text-primary font-body"
                           onClick={() => setMobileOpen(false)}
                         >
