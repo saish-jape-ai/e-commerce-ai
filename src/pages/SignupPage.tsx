@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 const SignupPage = () => {
+  const navigate = useNavigate();
+  const { signup } = useAuth();
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -15,9 +18,16 @@ const SignupPage = () => {
     if (step === 1) { setStep(2); return; }
     setIsLoading(true);
     setTimeout(() => {
-      setIsLoading(false);
-      toast.success('Account created successfully! Welcome to Stylora.');
-    }, 1500);
+      try {
+        signup(form);
+        toast.success('Account created successfully! Welcome to Stylora.');
+        navigate('/profile', { replace: true });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Signup failed');
+      } finally {
+        setIsLoading(false);
+      }
+    }, 500);
   };
 
   const updateField = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));

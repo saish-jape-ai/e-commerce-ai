@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Search, ShoppingBag, Heart, User, Menu, X, ChevronDown } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 
 const megaMenuData = {
   Men: {
@@ -33,16 +35,34 @@ type MenuKey = keyof typeof megaMenuData;
 
 const Header = () => {
   const { totalItems, wishlist } = useCart();
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setUserMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const onLogout = () => {
+    logout();
+    toast.success('Logged out');
+    setUserMenuOpen(false);
+    navigate('/', { replace: true });
+  };
 
   return (
     <>
@@ -104,9 +124,80 @@ const Header = () => {
                   </span>
                 )}
               </Link>
-              <Link to="/profile" className="p-2 hover:bg-muted rounded-full transition-colors hidden sm:flex">
-                <User size={20} />
-              </Link>
+              <div className="relative hidden sm:flex">
+                <button
+                  type="button"
+                  onClick={() => setUserMenuOpen(v => !v)}
+                  className="p-2 hover:bg-muted rounded-full transition-colors"
+                  aria-label="Account menu"
+                >
+                  <User size={20} />
+                </button>
+
+                <AnimatePresence>
+                  {userMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-12 w-56 bg-background border border-border rounded-xl shadow-lg overflow-hidden z-50"
+                    >
+                      <div className="p-4 border-b border-border">
+                        <p className="text-sm font-semibold text-foreground font-body line-clamp-1">
+                          {isAuthenticated ? user?.name : 'Guest'}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-body line-clamp-1">
+                          {isAuthenticated ? user?.email : 'Sign in for orders & offers'}
+                        </p>
+                      </div>
+
+                      {isAuthenticated ? (
+                        <div className="p-2">
+                          <button
+                            type="button"
+                            onClick={() => { setUserMenuOpen(false); navigate('/profile'); }}
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm font-body hover:bg-muted transition-colors"
+                          >
+                            My Profile
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setUserMenuOpen(false); navigate('/settings'); }}
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm font-body hover:bg-muted transition-colors"
+                          >
+                            Settings
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onLogout}
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm font-body hover:bg-destructive/10 text-destructive transition-colors"
+                          >
+                            Logout
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-2">
+                          <button
+                            type="button"
+                            onClick={() => { setUserMenuOpen(false); navigate('/login'); }}
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm font-body hover:bg-muted transition-colors"
+                          >
+                            Login
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setUserMenuOpen(false); navigate('/signup'); }}
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm font-body hover:bg-muted transition-colors"
+                          >
+                            Create account
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>

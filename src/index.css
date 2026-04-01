@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Afacad+Flux:wght@100..900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -44,8 +44,8 @@
     --fashion-blush: 350 100% 96%;
     --fashion-sage: 150 20% 60%;
 
-    --font-display: 'Playfair Display', serif;
-    --font-body: 'DM Sans', sans-serif;
+    --font-display: 'Afacad Flux', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    --font-body: 'Afacad Flux', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
 
     --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
     --shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.12);

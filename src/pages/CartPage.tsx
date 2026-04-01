@@ -3,9 +3,47 @@ import { Trash2, Plus, Minus, ShoppingBag, Tag, ArrowRight } from 'lucide-react'
 import { useCart } from '@/context/CartContext';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useEffect, useMemo, useState } from 'react';
+import { evaluateCoupon } from '@/lib/coupons';
+import { storageGetJson, storageSetJson } from '@/lib/storage';
 
 const CartPage = () => {
   const { items, removeFromCart, updateQuantity, totalPrice, clearCart } = useCart();
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+
+  useEffect(() => {
+    const stored = storageGetJson<string | null>('stylora_coupon_v1');
+    if (typeof stored === 'string' && stored) {
+      setAppliedCoupon(stored);
+      setCouponInput(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    storageSetJson('stylora_coupon_v1', appliedCoupon);
+  }, [appliedCoupon]);
+
+  const couponResult = useMemo(() => {
+    if (!appliedCoupon) return null;
+    const res = evaluateCoupon(totalPrice, appliedCoupon);
+    return res.ok ? res : null;
+  }, [appliedCoupon, totalPrice]);
+
+  const discount = couponResult?.discountAmount || 0;
+  const deliveryFee = couponResult?.freeShipping ? 0 : (totalPrice > 999 ? 0 : 99);
+  const finalTotal = Math.max(0, totalPrice - discount + deliveryFee);
+
+  const applyCoupon = () => {
+    const res = evaluateCoupon(totalPrice, couponInput);
+    if (res.ok === false) {
+      toast.error(res.reason);
+      return;
+    }
+    setAppliedCoupon(res.code);
+    setCouponInput(res.code);
+    toast.success(`Coupon "${res.code}" applied`);
+  };
 
   if (items.length === 0) {
     return (
@@ -19,10 +57,6 @@ const CartPage = () => {
       </div>
     );
   }
-
-  const discount = Math.round(totalPrice * 0.1);
-  const deliveryFee = totalPrice > 999 ? 0 : 99;
-  const finalTotal = totalPrice - discount + deliveryFee;
 
   return (
     <div className="container mx-auto py-6 px-4">
@@ -80,8 +114,10 @@ const CartPage = () => {
                 <span className="text-foreground">₹{totalPrice.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Discount</span>
-                <span className="text-green-600">-₹{discount.toLocaleString()}</span>
+                <span className="text-muted-foreground">Coupon Discount</span>
+                <span className={discount > 0 ? 'text-green-600' : 'text-muted-foreground'}>
+                  {discount > 0 ? `-₹${discount.toLocaleString()}` : '₹0'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Delivery Fee</span>
@@ -96,11 +132,42 @@ const CartPage = () => {
             </div>
 
             {/* Coupon */}
-            <div className="mt-4 pt-4 border-t border-border">
-              <div className="flex items-center gap-2 text-sm text-primary font-semibold cursor-pointer font-body">
-                <Tag size={16} />
-                Apply Coupon
+            <div className="mt-4 pt-4 border-t border-border space-y-3">
+              <div className="flex items-center gap-2 text-sm text-foreground font-semibold font-body">
+                <Tag size={16} className="text-primary" />
+                Coupon
               </div>
+
+              <div className="flex gap-2">
+                <input
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  placeholder="Enter code (e.g. STYLE25)"
+                  className="flex-1 px-3 py-2 border border-border rounded-lg bg-background text-sm font-body outline-none focus:border-primary transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={applyCoupon}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold font-body fashion-gradient text-primary-foreground hover:opacity-90 transition-opacity"
+                >
+                  Apply
+                </button>
+              </div>
+
+              {appliedCoupon && (
+                <div className="flex items-center justify-between text-sm font-body">
+                  <span className="text-muted-foreground">
+                    Applied: <span className="font-semibold text-foreground">{appliedCoupon}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setAppliedCoupon(null); setCouponInput(''); toast.message('Coupon removed'); }}
+                    className="text-primary font-semibold hover:opacity-80 transition-opacity"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
             </div>
 
             <Link

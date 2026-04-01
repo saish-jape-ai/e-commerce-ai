@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Bell, Globe, Moon, Sun, Shield, Eye, Smartphone, Mail, Lock, ChevronRight, LogOut, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 
 interface SettingToggle {
   id: string;
@@ -12,6 +14,8 @@ interface SettingToggle {
 }
 
 const SettingsPage = () => {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [notifications, setNotifications] = useState<SettingToggle[]>([
     { id: 'email_orders', label: 'Order Updates', desc: 'Get notified about your order status via email', icon: Mail, enabled: true },
     { id: 'email_offers', label: 'Offers & Promotions', desc: 'Receive deals, coupons, and personalized offers', icon: Mail, enabled: true },
@@ -154,7 +158,7 @@ const SettingsPage = () => {
         <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
           <h2 className="text-lg font-display font-bold text-foreground mb-4">Account</h2>
           <div className="bg-card border border-border rounded-2xl divide-y divide-border">
-            <button onClick={() => toast.info('Logout coming soon!')} className="w-full flex items-center gap-3 p-5 text-foreground hover:bg-muted/50 transition-colors">
+            <button onClick={() => { logout(); toast.success('Logged out'); navigate('/', { replace: true }); }} className="w-full flex items-center gap-3 p-5 text-foreground hover:bg-muted/50 transition-colors">
               <LogOut size={18} />
               <span className="text-sm font-semibold font-body">Log Out</span>
             </button>
