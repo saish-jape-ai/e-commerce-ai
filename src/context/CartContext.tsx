@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import type { Product } from '@/data/products';
+import { storageGetJson, storageSetJson } from '@/lib/storage';
 
 interface CartItem {
   product: Product;
@@ -26,6 +27,22 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
+
+  useEffect(() => {
+    const storedItems = storageGetJson<CartItem[]>("stylora_cart_v1");
+    if (Array.isArray(storedItems)) setItems(storedItems);
+
+    const storedWishlist = storageGetJson<string[]>("stylora_wishlist_v1");
+    if (Array.isArray(storedWishlist)) setWishlist(storedWishlist);
+  }, []);
+
+  useEffect(() => {
+    storageSetJson("stylora_cart_v1", items);
+  }, [items]);
+
+  useEffect(() => {
+    storageSetJson("stylora_wishlist_v1", wishlist);
+  }, [wishlist]);
 
   const addToCart = useCallback((product: Product, size: string, color: string) => {
     setItems(prev => {

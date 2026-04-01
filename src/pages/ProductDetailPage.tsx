@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Heart, ShoppingBag, Star, Truck, RotateCcw, Shield, ChevronRight } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
@@ -6,6 +6,7 @@ import { products } from '@/data/products';
 import ProductCard from '@/components/ProductCard';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { addRecentlyViewedId } from '@/lib/recentlyViewed';
 
 const ProductDetailPage = () => {
   const { id } = useParams();
@@ -13,6 +14,10 @@ const ProductDetailPage = () => {
   const { addToCart, toggleWishlist, isInWishlist } = useCart();
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
+
+  useEffect(() => {
+    if (product) addRecentlyViewedId(product.id);
+  }, [product]);
 
   if (!product) {
     return (

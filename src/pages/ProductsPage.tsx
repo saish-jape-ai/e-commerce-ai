@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SlidersHorizontal, X, ChevronDown } from 'lucide-react';
+import { SlidersHorizontal, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import { products } from '@/data/products';
+import { products, subcategoryMap } from '@/data/products';
 import { motion, AnimatePresence } from 'framer-motion';
+import RecentlyViewed from '@/components/RecentlyViewed';
+import { getRecentlyViewedIds } from '@/lib/recentlyViewed';
 
 const sortOptions = [
   { label: 'Recommended', value: 'recommended' },
@@ -17,12 +19,98 @@ const genderFilters = ['All', 'Men', 'Women', 'Kids', 'Unisex'];
 const categoryFilters = ['All', 'Topwear', 'Bottomwear', 'Footwear', 'Accessories', 'Ethnic'];
 
 const ProductsPage = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortBy, setSortBy] = useState('recommended');
   const [selectedGender, setSelectedGender] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('All');
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
+  const [query, setQuery] = useState('');
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
+  const hydratedFromUrlRef = useRef(false);
+
+  useEffect(() => {
+    setRecentlyViewedIds(getRecentlyViewedIds());
+  }, []);
+
+  useEffect(() => {
+    const genderParam = (searchParams.get('gender') || '').trim();
+    const categoryParam = (searchParams.get('category') || '').trim();
+    const subcategoryParam = (searchParams.get('sub') || '').trim();
+    const qParam = (searchParams.get('q') || '').trim();
+    const sortParam = (searchParams.get('sort') || '').trim();
+    const hasMin = searchParams.has('min');
+    const hasMax = searchParams.has('max');
+    const minParam = hasMin ? Number(searchParams.get('min')) : 0;
+    const maxParam = hasMax ? Number(searchParams.get('max')) : 10000;
+
+    const normalizedGender = genderFilters.find(g => g.toLowerCase() === genderParam.toLowerCase()) || 'All';
+
+    const allSubcategories = Object.values(subcategoryMap).flat();
+    const subToCategory = new Map<string, string>();
+    Object.entries(subcategoryMap).forEach(([cat, subs]) => subs.forEach(s => subToCategory.set(s.toLowerCase(), cat)));
+
+    const subFromCategoryParam = allSubcategories.find(s => s.toLowerCase() === categoryParam.toLowerCase()) || null;
+    const subFromSubParam = allSubcategories.find(s => s.toLowerCase() === subcategoryParam.toLowerCase()) || null;
+    const inferredCategory =
+      (subFromCategoryParam && subToCategory.get(subFromCategoryParam.toLowerCase())) ||
+      (subFromSubParam && subToCategory.get(subFromSubParam.toLowerCase())) ||
+      null;
+
+    const normalizedCategory =
+      inferredCategory ||
+      categoryFilters.find(c => c.toLowerCase() === categoryParam.toLowerCase()) ||
+      'All';
+
+    const normalizedSubcategory = subFromSubParam || subFromCategoryParam || 'All';
+
+    const normalizedSort = sortOptions.some(o => o.value === sortParam) ? sortParam : 'recommended';
+
+    if (selectedGender !== normalizedGender) setSelectedGender(normalizedGender);
+    if (selectedCategory !== normalizedCategory) setSelectedCategory(normalizedCategory);
+    if (selectedSubcategory !== normalizedSubcategory) setSelectedSubcategory(normalizedSubcategory);
+    if (query !== qParam) setQuery(qParam);
+    if (sortBy !== normalizedSort) setSortBy(normalizedSort);
+
+    const nextPriceRange: [number, number] = [
+      Number.isFinite(minParam) ? minParam : 0,
+      Number.isFinite(maxParam) ? maxParam : 10000,
+    ];
+    if (priceRange[0] !== nextPriceRange[0] || priceRange[1] !== nextPriceRange[1]) setPriceRange(nextPriceRange);
+
+    hydratedFromUrlRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!hydratedFromUrlRef.current) return;
+
+    const next = new URLSearchParams();
+    if (query) next.set('q', query);
+    if (sortBy !== 'recommended') next.set('sort', sortBy);
+    if (selectedGender !== 'All') next.set('gender', selectedGender.toLowerCase());
+    if (selectedCategory !== 'All') next.set('category', selectedCategory);
+    if (selectedSubcategory !== 'All') next.set('sub', selectedSubcategory);
+    if (priceRange[0] !== 0) next.set('min', String(priceRange[0]));
+    if (priceRange[1] !== 10000) next.set('max', String(priceRange[1]));
+
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [query, sortBy, selectedGender, selectedCategory, selectedSubcategory, priceRange, searchParams, setSearchParams]);
+
+  const onClearAll = () => {
+    setSortBy('recommended');
+    setSelectedGender('All');
+    setSelectedCategory('All');
+    setSelectedSubcategory('All');
+    setPriceRange([0, 10000]);
+    setQuery('');
+  };
+
+  const availableSubcategories = useMemo(() => {
+    if (selectedCategory === 'All') return [];
+    return subcategoryMap[selectedCategory] || [];
+  }, [selectedCategory]);
 
   const filtered = useMemo(() => {
     let result = [...products];
@@ -31,6 +119,19 @@ const ProductsPage = () => {
     }
     if (selectedCategory !== 'All') {
       result = result.filter(p => p.category === selectedCategory);
+    }
+    if (selectedSubcategory !== 'All') {
+      result = result.filter(p => p.subcategory === selectedSubcategory);
+    }
+    if (query) {
+      const q = query.toLowerCase();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.brand.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        p.subcategory.toLowerCase().includes(q) ||
+        p.tags.some(t => t.toLowerCase().includes(q))
+      );
     }
     result = result.filter(p => p.price >= priceRange[0] && p.price <= priceRange[1]);
 
@@ -41,10 +142,20 @@ const ProductsPage = () => {
       case 'rating': result.sort((a, b) => b.rating - a.rating); break;
     }
     return result;
-  }, [selectedGender, selectedCategory, priceRange, sortBy]);
+  }, [query, selectedGender, selectedCategory, selectedSubcategory, priceRange, sortBy]);
+
+  const recentlyViewedProducts = useMemo(() => {
+    if (recentlyViewedIds.length === 0) return [];
+    const map = new Map(products.map(p => [p.id, p]));
+    return recentlyViewedIds.map(id => map.get(id)).filter(Boolean);
+  }, [recentlyViewedIds]);
 
   return (
     <div className="container mx-auto py-6 px-4">
+      {recentlyViewedProducts.length > 0 && (
+        <RecentlyViewed products={recentlyViewedProducts} />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -68,6 +179,52 @@ const ProductsPage = () => {
         </div>
       </div>
 
+      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative w-full lg:max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search in products..."
+            className="w-full pl-10 pr-10 py-3 border border-border rounded-xl bg-background font-body outline-none focus:border-primary transition-colors"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Clear search"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2 items-center">
+          {(selectedGender !== 'All' || selectedCategory !== 'All' || selectedSubcategory !== 'All' || priceRange[0] !== 0 || priceRange[1] !== 10000 || sortBy !== 'recommended') && (
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="text-sm font-semibold text-primary hover:opacity-80 transition-opacity font-body"
+            >
+              Clear all
+            </button>
+          )}
+          {selectedGender !== 'All' && (
+            <span className="px-3 py-1 rounded-full bg-muted text-sm font-body">{selectedGender}</span>
+          )}
+          {selectedCategory !== 'All' && (
+            <span className="px-3 py-1 rounded-full bg-muted text-sm font-body">{selectedCategory}</span>
+          )}
+          {selectedSubcategory !== 'All' && (
+            <span className="px-3 py-1 rounded-full bg-muted text-sm font-body">{selectedSubcategory}</span>
+          )}
+          {(priceRange[0] !== 0 || priceRange[1] !== 10000) && (
+            <span className="px-3 py-1 rounded-full bg-muted text-sm font-body">₹{priceRange[0]}–₹{priceRange[1]}</span>
+          )}
+        </div>
+      </div>
+
       <div className="flex gap-6">
         {/* Sidebar Filters (desktop) */}
         <aside className="hidden lg:block w-60 shrink-0 sticky top-20 self-start h-[calc(100vh-5rem)] overflow-y-auto pr-2 overscroll-contain">
@@ -75,9 +232,13 @@ const ProductsPage = () => {
             selectedGender={selectedGender}
             setSelectedGender={setSelectedGender}
             selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
+            setSelectedCategory={(v) => { setSelectedCategory(v); setSelectedSubcategory('All'); }}
+            selectedSubcategory={selectedSubcategory}
+            setSelectedSubcategory={setSelectedSubcategory}
+            availableSubcategories={availableSubcategories}
             priceRange={priceRange}
             setPriceRange={setPriceRange}
+            onClearAll={onClearAll}
           />
         </aside>
 
@@ -107,9 +268,13 @@ const ProductsPage = () => {
                   selectedGender={selectedGender}
                   setSelectedGender={setSelectedGender}
                   selectedCategory={selectedCategory}
-                  setSelectedCategory={setSelectedCategory}
+                  setSelectedCategory={(v) => { setSelectedCategory(v); setSelectedSubcategory('All'); }}
+                  selectedSubcategory={selectedSubcategory}
+                  setSelectedSubcategory={setSelectedSubcategory}
+                  availableSubcategories={availableSubcategories}
                   priceRange={priceRange}
                   setPriceRange={setPriceRange}
+                  onClearAll={() => { onClearAll(); setFiltersOpen(false); }}
                 />
               </motion.div>
             </motion.div>
@@ -139,12 +304,31 @@ interface FilterPanelProps {
   setSelectedGender: (v: string) => void;
   selectedCategory: string;
   setSelectedCategory: (v: string) => void;
+  selectedSubcategory: string;
+  setSelectedSubcategory: (v: string) => void;
+  availableSubcategories: string[];
   priceRange: [number, number];
   setPriceRange: (v: [number, number]) => void;
+  onClearAll: () => void;
 }
 
-const FilterPanel = ({ selectedGender, setSelectedGender, selectedCategory, setSelectedCategory, priceRange, setPriceRange }: FilterPanelProps) => (
+const FilterPanel = ({
+  selectedGender,
+  setSelectedGender,
+  selectedCategory,
+  setSelectedCategory,
+  selectedSubcategory,
+  setSelectedSubcategory,
+  availableSubcategories,
+  priceRange,
+  setPriceRange,
+  onClearAll,
+}: FilterPanelProps) => (
   <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <h3 className="text-sm font-bold uppercase tracking-wider text-foreground font-body">Filters</h3>
+      <button onClick={onClearAll} className="text-sm font-semibold text-primary font-body">Reset</button>
+    </div>
     <div>
       <h4 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 font-body">Gender</h4>
       <div className="space-y-2">
@@ -179,6 +363,26 @@ const FilterPanel = ({ selectedGender, setSelectedGender, selectedCategory, setS
         ))}
       </div>
     </div>
+
+    {availableSubcategories.length > 0 && (
+      <div className="border-t border-border pt-4">
+        <h4 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 font-body">Subcategory</h4>
+        <div className="space-y-2 max-h-56 overflow-y-auto pr-2">
+          {['All', ...availableSubcategories].map(s => (
+            <label key={s} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="subcategory"
+                checked={selectedSubcategory === s}
+                onChange={() => setSelectedSubcategory(s)}
+                className="accent-primary"
+              />
+              <span className="text-sm text-foreground font-body">{s}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    )}
     <div className="border-t border-border pt-4">
       <h4 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 font-body">Price Range</h4>
       <div className="flex items-center gap-2">

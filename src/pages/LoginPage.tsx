@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 const LoginPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -14,9 +18,17 @@ const LoginPage = () => {
     e.preventDefault();
     setIsLoading(true);
     setTimeout(() => {
-      setIsLoading(false);
-      toast.success('Login successful! Welcome back.');
-    }, 1500);
+      try {
+        login({ email, password });
+        toast.success('Login successful! Welcome back.');
+        const from = (location.state as { from?: string } | null)?.from;
+        navigate(from || '/profile', { replace: true });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Login failed');
+      } finally {
+        setIsLoading(false);
+      }
+    }, 500);
   };
 
   return (

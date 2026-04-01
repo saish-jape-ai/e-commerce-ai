@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { User, Mail, Phone, MapPin, Package, Heart, CreditCard, Settings, ChevronRight, LogOut, Edit2, Tag, Truck } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 const mockOrders = [
   { id: 'STY001', date: 'Mar 28, 2026', total: 2598, status: 'Delivered', items: 2, image: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=80&h=80&fit=crop' },
@@ -19,7 +20,22 @@ const tabs = [
 ];
 
 const ProfilePage = () => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
+
+  const initials = (user?.name || 'User')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(s => s[0]?.toUpperCase())
+    .join('');
+
+  const onLogout = () => {
+    logout();
+    toast.success('Logged out');
+    navigate('/', { replace: true });
+  };
 
   return (
     <div className="container mx-auto py-6 px-4">
@@ -30,14 +46,14 @@ const ProfilePage = () => {
             <div className="text-center mb-6">
               <div className="relative inline-block">
                 <div className="w-20 h-20 rounded-full fashion-gradient flex items-center justify-center">
-                  <span className="text-2xl font-bold text-primary-foreground font-display">RS</span>
+                  <span className="text-2xl font-bold text-primary-foreground font-display">{initials || 'U'}</span>
                 </div>
                 <button className="absolute bottom-0 right-0 w-7 h-7 bg-background border border-border rounded-full flex items-center justify-center hover:bg-muted transition-colors">
                   <Edit2 size={12} />
                 </button>
               </div>
-              <h2 className="text-lg font-display font-bold text-foreground mt-3">Rahul Sharma</h2>
-              <p className="text-sm text-muted-foreground font-body">Premium Member</p>
+              <h2 className="text-lg font-display font-bold text-foreground mt-3">{user?.name || 'User'}</h2>
+              <p className="text-sm text-muted-foreground font-body">{user?.email || ''}</p>
               <div className="flex items-center justify-center gap-1 mt-1">
                 <span className="text-xs bg-fashion-gold/20 text-fashion-gold font-bold px-2 py-0.5 rounded-full font-body">⭐ Gold</span>
               </div>
@@ -69,7 +85,7 @@ const ProfilePage = () => {
                 <Link to="/settings" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-body font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
                   <Settings size={18} /> Settings
                 </Link>
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-body font-medium text-destructive hover:bg-destructive/10 transition-colors">
+                <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-body font-medium text-destructive hover:bg-destructive/10 transition-colors">
                   <LogOut size={18} /> Logout
                 </button>
               </div>
@@ -85,9 +101,9 @@ const ProfilePage = () => {
               <div className="bg-card border border-border rounded-2xl p-6">
                 <div className="grid sm:grid-cols-2 gap-4">
                   {[
-                    { label: 'Full Name', value: 'Rahul Sharma', icon: User },
-                    { label: 'Email', value: 'rahul@example.com', icon: Mail },
-                    { label: 'Phone', value: '+91 98765 43210', icon: Phone },
+                    { label: 'Full Name', value: user?.name || '-', icon: User },
+                    { label: 'Email', value: user?.email || '-', icon: Mail },
+                    { label: 'Phone', value: user?.phone || '-', icon: Phone },
                     { label: 'Gender', value: 'Male', icon: User },
                     { label: 'Date of Birth', value: '15 Aug 1995', icon: User },
                     { label: 'Location', value: 'Gurugram, Haryana', icon: MapPin },

@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { MapPin, CreditCard, Truck, Shield, ChevronRight, Plus, Check } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { evaluateCoupon } from '@/lib/coupons';
+import { storageGetJson } from '@/lib/storage';
 
 const savedAddresses = [
   { id: '1', name: 'Rahul Sharma', phone: '+91 98765 43210', line1: '42, Park Street', line2: 'Sector 15, Gurugram', city: 'Gurugram', state: 'Haryana', pin: '122001', type: 'Home' },
@@ -24,10 +26,22 @@ const CheckoutPage = () => {
   const [selectedAddress, setSelectedAddress] = useState(savedAddresses[0].id);
   const [selectedPayment, setSelectedPayment] = useState('upi');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
 
-  const discount = Math.round(totalPrice * 0.1);
-  const deliveryFee = totalPrice > 999 ? 0 : 99;
-  const finalTotal = totalPrice - discount + deliveryFee;
+  useEffect(() => {
+    const stored = storageGetJson<string | null>('stylora_coupon_v1');
+    if (typeof stored === 'string' && stored) setAppliedCoupon(stored);
+  }, []);
+
+  const couponResult = useMemo(() => {
+    if (!appliedCoupon) return null;
+    const res = evaluateCoupon(totalPrice, appliedCoupon);
+    return res.ok ? res : null;
+  }, [appliedCoupon, totalPrice]);
+
+  const discount = couponResult?.discountAmount || 0;
+  const deliveryFee = couponResult?.freeShipping ? 0 : (totalPrice > 999 ? 0 : 99);
+  const finalTotal = Math.max(0, totalPrice - discount + deliveryFee);
 
   if (items.length === 0) {
     return (
@@ -210,7 +224,18 @@ const CheckoutPage = () => {
             <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-4 font-body">Order Summary</h3>
             <div className="space-y-2 text-sm font-body">
               <div className="flex justify-between"><span className="text-muted-foreground">Items ({items.length})</span><span>₹{totalPrice.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-green-600">-₹{discount.toLocaleString()}</span></div>
+              {appliedCoupon && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Coupon</span>
+                  <span className="text-foreground font-semibold">{appliedCoupon}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Coupon Discount</span>
+                <span className={discount > 0 ? 'text-green-600' : 'text-muted-foreground'}>
+                  {discount > 0 ? `-₹${discount.toLocaleString()}` : '₹0'}
+                </span>
+              </div>
               <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span className={deliveryFee === 0 ? 'text-green-600' : ''}>{deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span></div>
               <div className="border-t border-border pt-2 flex justify-between font-bold text-base"><span>Total</span><span>₹{finalTotal.toLocaleString()}</span></div>
             </div>
