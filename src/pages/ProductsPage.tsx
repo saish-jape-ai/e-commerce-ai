@@ -70,7 +70,7 @@ const ProductsPage = () => {
 
       <div className="flex gap-6">
         {/* Sidebar Filters (desktop) */}
-        <aside className="hidden lg:block w-60 shrink-0">
+        <aside className="hidden lg:block w-60 shrink-0 sticky top-20 self-start h-[calc(100vh-5rem)] overflow-y-auto pr-2 overscroll-contain">
           <FilterPanel
             selectedGender={selectedGender}
             setSelectedGender={setSelectedGender}
