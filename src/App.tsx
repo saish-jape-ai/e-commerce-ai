@@ -16,6 +16,11 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ProfilePage from "./pages/ProfilePage";
 import SearchPage from "./pages/SearchPage";
+import ContactPage from "./pages/ContactPage";
+import AboutPage from "./pages/AboutPage";
+import OrderTrackingPage from "./pages/OrderTrackingPage";
+import SettingsPage from "./pages/SettingsPage";
+import CouponsPage from "./pages/CouponsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +45,11 @@ const App = () => (
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/search" element={<SearchPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/track-order" element={<OrderTrackingPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/coupons" element={<CouponsPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
