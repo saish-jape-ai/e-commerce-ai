@@ -193,12 +193,12 @@ const ProductsPage = () => {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">All Products</h1>
           <p className="text-sm text-muted-foreground font-body">{filtered.length} items found</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 justify-between sm:justify-end">
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
             className="lg:hidden flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-body"
@@ -293,7 +293,7 @@ const ProductsPage = () => {
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'tween' }}
-                className="w-80 h-full bg-background overflow-y-auto p-6"
+                className="w-[85vw] max-w-sm h-full bg-background overflow-y-auto p-6"
                 onClick={e => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-6">

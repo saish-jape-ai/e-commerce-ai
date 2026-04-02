@@ -98,8 +98,8 @@ const Header = () => {
       </div>
 
       <header className={`sticky top-0 z-50 transition-all duration-300 bg-background ${isScrolled ? 'shadow-md' : 'border-b border-border'}`}>
-        <div className="container mx-auto">
-          <div className="flex items-center justify-between h-16">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16 gap-2">
             {/* Mobile menu */}
             <button className="lg:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
               {mobileOpen ? <X size={22} /> : <Menu size={22} />}
@@ -242,6 +242,29 @@ const Header = () => {
               </div>
             </div>
           </div>
+
+          {/* Mobile inline search */}
+          <div className="lg:hidden pb-3">
+            <form onSubmit={onSubmitSearch} className="relative">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                placeholder="Search products..."
+                className="w-full pl-10 pr-10 py-2.5 border border-border rounded-full bg-background font-body outline-none focus:border-primary transition-colors"
+              />
+              {searchValue && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchValue(''); navigate('/products'); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </form>
+          </div>
         </div>
 
         {/* Mega Menu */}
@@ -295,12 +318,70 @@ const Header = () => {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'tween' }}
-            className="fixed inset-y-0 left-0 w-80 bg-background z-50 shadow-2xl overflow-y-auto lg:hidden"
+            className="fixed inset-y-0 left-0 w-[85vw] max-w-sm bg-background z-50 shadow-2xl overflow-y-auto lg:hidden"
           >
             <div className="p-6">
               <div className="flex items-center justify-between mb-8">
                 <span className="font-display text-xl font-bold">STYLORA</span>
                 <button onClick={() => setMobileOpen(false)}><X size={22} /></button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onSubmitSearch(e);
+                  setMobileOpen(false);
+                }}
+                className="relative mb-6"
+              >
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  placeholder="Search products..."
+                  className="w-full pl-10 pr-10 py-2.5 border border-border rounded-full bg-background font-body outline-none focus:border-primary transition-colors"
+                />
+                {searchValue && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchValue('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </form>
+
+              <div className="mb-6 border border-border rounded-xl p-3">
+                {isAuthenticated ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground font-body line-clamp-1">{user?.name}</p>
+                      <p className="text-xs text-muted-foreground font-body line-clamp-1">{user?.email}</p>
+                    </div>
+                    <button onClick={() => { onLogout(); setMobileOpen(false); }} className="text-sm font-semibold text-destructive font-body">
+                      Logout
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setMobileOpen(false); navigate('/login'); }}
+                      className="flex-1 py-2 rounded-lg border border-border text-sm font-semibold font-body hover:bg-muted transition-colors"
+                    >
+                      Login
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setMobileOpen(false); navigate('/signup'); }}
+                      className="flex-1 py-2 rounded-lg fashion-gradient text-primary-foreground text-sm font-semibold font-body hover:opacity-90 transition-opacity"
+                    >
+                      Signup
+                    </button>
+                  </div>
+                )}
               </div>
               {(Object.keys(megaMenuData) as MenuKey[]).map(key => (
                 <div key={key} className="mb-4">
