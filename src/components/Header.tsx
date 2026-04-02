@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, ShoppingBag, Heart, User, Menu, X, ChevronDown } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -47,11 +47,12 @@ const Header = () => {
   const { totalItems, wishlist } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -67,11 +68,26 @@ const Header = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (location.pathname !== '/products') return;
+    const params = new URLSearchParams(location.search);
+    setSearchValue(params.get('q') || '');
+  }, [location.pathname, location.search]);
+
   const onLogout = () => {
     logout();
     toast.success('Logged out');
     setUserMenuOpen(false);
     navigate('/', { replace: true });
+  };
+
+  const onSubmitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchValue.trim();
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    setActiveMenu(null);
+    navigate(params.toString() ? `/products?${params.toString()}` : '/products');
   };
 
   return (
@@ -115,9 +131,25 @@ const Header = () => {
 
             {/* Right actions */}
             <div className="flex items-center gap-2">
-              <Link to="/search" className="p-2 hover:bg-muted rounded-full transition-colors">
-                <Search size={20} />
-              </Link>
+              <form onSubmit={onSubmitSearch} className="hidden lg:flex items-center relative mr-2">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  placeholder="Search products, brands and more..."
+                  className="w-[360px] xl:w-[460px] 2xl:w-[520px] pl-10 pr-10 py-2.5 border border-border rounded-full bg-background font-body outline-none focus:border-primary transition-colors"
+                />
+                {searchValue && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchValue(''); navigate('/products'); }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </form>
               <Link to="/wishlist" className="p-2 hover:bg-muted rounded-full transition-colors relative">
                 <Heart size={20} />
                 {wishlist.length > 0 && (
@@ -250,55 +282,6 @@ const Header = () => {
                   ))}
                 </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Search Overlay */}
-        <AnimatePresence>
-          {searchOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-foreground/50 z-50 flex items-start justify-center pt-20"
-              onClick={() => setSearchOpen(false)}
-            >
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="bg-background rounded-lg p-6 w-full max-w-2xl mx-4 shadow-2xl"
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="flex items-center gap-3 border-b border-border pb-4">
-                  <Search size={22} className="text-muted-foreground" />
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="Search for products, brands and more..."
-                    className="flex-1 text-lg outline-none bg-transparent font-body"
-                  />
-                  <button onClick={() => setSearchOpen(false)}>
-                    <X size={22} />
-                  </button>
-                </div>
-                <div className="pt-4">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3">Trending Searches</p>
-                  <div className="flex flex-wrap gap-2">
-                    {['Dresses', 'Sneakers', 'Kurtas', 'Jackets', 'T-Shirts', 'Jeans'].map(tag => (
-                      <Link
-                        key={tag}
-                        to={buildProductsLink({ q: tag })}
-                        className="px-3 py-1.5 bg-muted rounded-full text-sm text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors font-body"
-                        onClick={() => setSearchOpen(false)}
-                      >
-                        {tag}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
