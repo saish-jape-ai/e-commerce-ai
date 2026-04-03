@@ -10,6 +10,7 @@ import type {
   PlatformOrderCreateRequest,
   PlatformOrderCreateResponse,
   PlatformProduct,
+  PlatformProductDetailResponse,
   PlatformUserGetResponse,
   PlatformUserProfileInfoUpdateResponse,
   PlatformUserAddress,
@@ -78,6 +79,21 @@ const tryPostThenGet = async <T>(url: string, body: unknown, init?: RequestInit 
   }
 };
 
+const tryGetThenPost = async <T>(url: string, body: unknown, init?: RequestInit & { timeoutMs?: number }) => {
+  try {
+    return await platformFetchJson<T>(url, { method: 'GET', ...init });
+  } catch (err: unknown) {
+    const status =
+      (err && typeof err === 'object' && 'status' in err && typeof (err as { status?: unknown }).status === 'number')
+        ? (err as { status: number }).status
+        : undefined;
+    if (status === 404 || status === 405 || status === 415) {
+      return postJson<T>(url, body, init);
+    }
+    throw err;
+  }
+};
+
 export const platformApi = {
   async publicCategories(input?: { clientId?: string; k?: string; limit?: number; offset?: number; signal?: AbortSignal }) {
     const cfg = getPlatformConfig();
@@ -101,6 +117,14 @@ export const platformApi = {
     const url = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/get-products`);
     const payload = { k: input?.k ?? '', limit: input?.limit, offset: input?.offset };
     return postJson<PlatformApiResponse<PlatformProduct[]>>(url, payload, { signal: input?.signal });
+  },
+
+  async publicProductDetail(input: { productId: string; clientId?: string; k?: string; signal?: AbortSignal }) {
+    const cfg = getPlatformConfig();
+    const clientId = input.clientId || cfg.productDetailsClientId;
+    const base = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/product/${input.productId}`);
+    const url = withQuery(base, { k: input.k ?? '' });
+    return tryGetThenPost<PlatformProductDetailResponse>(url, { k: input.k ?? '' }, { signal: input.signal, headers: { 'Content-Type': 'application/json' } });
   },
 
   async login(input: { email: string; password: string; captchaToken?: string | null; signal?: AbortSignal }) {

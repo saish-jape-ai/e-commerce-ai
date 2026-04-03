@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { addRecentlyViewedId } from '@/lib/recentlyViewed';
 import { useQueryClient } from '@tanstack/react-query';
 import type { PlatformProductsResult } from '@/hooks/usePlatformCatalog';
-import { usePlatformProducts } from '@/hooks/usePlatformCatalog';
+import { usePlatformProductDetail, usePlatformProducts } from '@/hooks/usePlatformCatalog';
 import { useRequireLogin } from '@/hooks/useRequireLogin';
 
 const ProductDetailPage = () => {
@@ -31,14 +31,11 @@ const ProductDetailPage = () => {
     [id, platformProducts]
   );
 
+  const detailQuery = usePlatformProductDetail(id);
   const fallbackQuery = usePlatformProducts({ k: '', limit: 200, offset: 0 });
-  const fallbackProduct = useMemo(
-    () => (fallbackQuery.data?.ui ?? []).find(p => p.id === id),
-    [fallbackQuery.data, id]
-  );
 
-  const product = platformProduct || fallbackProduct;
-  const sourceProducts = platformProduct ? platformProducts : (fallbackQuery.data?.ui ?? []);
+  const product = detailQuery.data?.ui || platformProduct || (fallbackQuery.data?.ui ?? []).find(p => p.id === id);
+  const sourceProducts = platformProducts.length ? platformProducts : (fallbackQuery.data?.ui ?? []);
   const { addToCart, toggleWishlist, isInWishlist } = useCart();
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
@@ -52,7 +49,9 @@ const ProductDetailPage = () => {
     return (
       <div className="container mx-auto py-20 text-center">
         <h1 className="text-2xl font-display font-bold">Product Not Found</h1>
-        <p className="text-sm text-muted-foreground font-body mt-2">This product may not be in the currently loaded page.</p>
+        {detailQuery.isLoading && (
+          <p className="text-sm text-muted-foreground font-body mt-2">Loading product…</p>
+        )}
         <Link to="/products" className="text-primary mt-4 inline-block font-body">← Back to Products</Link>
       </div>
     );
