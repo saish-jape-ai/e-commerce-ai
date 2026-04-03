@@ -6,8 +6,10 @@ import { toast } from 'sonner';
 import { useEffect, useMemo, useState } from 'react';
 import { evaluateCoupon } from '@/lib/coupons';
 import { storageGetJson, storageSetJson } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
 
 const CartPage = () => {
+  const { isAuthenticated } = useAuth();
   const { items, removeFromCart, updateQuantity, totalPrice, clearCart } = useCart();
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
@@ -33,6 +35,19 @@ const CartPage = () => {
   const discount = couponResult?.discountAmount || 0;
   const deliveryFee = couponResult?.freeShipping ? 0 : (totalPrice > 999 ? 0 : 99);
   const finalTotal = Math.max(0, totalPrice - discount + deliveryFee);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="container mx-auto py-20 text-center">
+        <ShoppingBag size={64} className="mx-auto text-muted-foreground mb-4" />
+        <h1 className="text-2xl font-display font-bold text-foreground mb-2">Login to view your bag</h1>
+        <p className="text-muted-foreground mb-6 font-body">Your cart is linked to your Platform account.</p>
+        <Link to="/login" className="inline-flex items-center gap-2 fashion-gradient text-primary-foreground px-8 py-3 rounded-full font-semibold text-sm font-body">
+          Login <ArrowRight size={16} />
+        </Link>
+      </div>
+    );
+  }
 
   const applyCoupon = () => {
     const res = evaluateCoupon(totalPrice, couponInput);

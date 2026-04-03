@@ -34,6 +34,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const queryClient = useQueryClient();
   const [items, setItems] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
+  const isAuthed = Boolean(accessToken && user?.id);
 
   const wishlistQuery = useQuery({
     queryKey: ['platform', 'wishlist', { userId: user?.id }],
@@ -50,22 +51,35 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const effectiveWishlist = accessToken ? serverWishlistIds : wishlist;
 
   useEffect(() => {
-    const storedItems = storageGetJson<CartItem[]>("stylora_cart_v1");
-    if (Array.isArray(storedItems)) setItems(storedItems);
-
     const storedWishlist = storageGetJson<string[]>("stylora_wishlist_v1");
     if (Array.isArray(storedWishlist)) setWishlist(storedWishlist);
   }, []);
 
   useEffect(() => {
+    if (!isAuthed) {
+      setItems([]);
+      storageSetJson("stylora_cart_v1", []);
+      return;
+    }
+
+    const storedItems = storageGetJson<CartItem[]>("stylora_cart_v1");
+    if (Array.isArray(storedItems)) setItems(storedItems);
+  }, [isAuthed]);
+
+  useEffect(() => {
+    if (!isAuthed) return;
     storageSetJson("stylora_cart_v1", items);
-  }, [items]);
+  }, [isAuthed, items]);
 
   useEffect(() => {
     storageSetJson("stylora_wishlist_v1", wishlist);
   }, [wishlist]);
 
   const addToCart = useCallback((product: Product, size: string, color: string) => {
+    if (!isAuthed) {
+      return;
+    }
+
     setItems(prev => {
       const existing = prev.find(i => i.product.id === product.id && i.size === size && i.color === color);
       if (existing) {
@@ -78,7 +92,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [...prev, { product, quantity: 1, size, color }];
     });
 
-    if (accessToken && user?.id && product.platformProductId) {
+    if (product.platformProductId) {
       platformApi
         .cartAdd({
           accessToken,
@@ -88,7 +102,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
               quantity: 1,
               check_inventory: false,
               product_id: product.platformProductId,
-              product_variant_id: product.platformVariantId ?? null,
+              // API curl uses null here; we only have a "display" variant today, not an explicit selection.
+              product_variant_id: null,
               product_set: 'full',
             },
           ],
@@ -108,10 +123,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .catch(err => {
           toast.error(err instanceof Error ? err.message : 'Failed to sync cart');
         });
+    } else {
+      toast.error('Missing platform product id');
     }
-  }, [accessToken, user?.id]);
+  }, [accessToken, isAuthed, user?.id]);
 
   const removeFromCart = useCallback((productId: string) => {
+    if (!isAuthed) return;
     setItems(prev => {
       const toDelete = prev.filter(i => i.product.id === productId).map(i => i.platformCartItemId).filter(Boolean) as string[];
       if (accessToken && toDelete.length) {
@@ -121,9 +139,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return prev.filter(i => i.product.id !== productId);
     });
-  }, [accessToken]);
+  }, [accessToken, isAuthed]);
 
   const updateQuantity = useCallback((productId: string, quantity: number) => {
+    if (!isAuthed) return;
     if (quantity <= 0) {
       setItems(prev => prev.filter(i => i.product.id !== productId));
       return;
@@ -140,17 +159,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return next;
     });
-  }, [accessToken]);
+  }, [accessToken, isAuthed]);
 
   const clearCart = useCallback(() => setItems([]), []);
 
   const toggleWishlist = useCallback((productId: string, meta?: { platformProductId?: string; platformVariantId?: string | null }) => {
+    if (!isAuthed) return;
     const already = effectiveWishlist.includes(productId);
 
-    // Optimistic UI update (local list is used as immediate feedback even when authed)
+    // Optimistic UI update
     setWishlist(prev => (prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]));
-
-    if (!accessToken || !user?.id) return;
 
     const platformProductId = meta?.platformProductId || productId;
     platformApi
@@ -171,7 +189,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setWishlist(prev => (already ? Array.from(new Set([...prev, productId])) : prev.filter(id => id !== productId)));
         toast.error(err instanceof Error ? err.message : 'Failed to update wishlist');
       });
-  }, [accessToken, effectiveWishlist, queryClient, user?.id]);
+  }, [accessToken, effectiveWishlist, isAuthed, queryClient, user?.id]);
 
   const isInWishlist = useCallback((productId: string) => effectiveWishlist.includes(productId), [effectiveWishlist]);
 

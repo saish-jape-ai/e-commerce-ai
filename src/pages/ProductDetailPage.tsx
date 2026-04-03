@@ -10,6 +10,7 @@ import { addRecentlyViewedId } from '@/lib/recentlyViewed';
 import { useQueryClient } from '@tanstack/react-query';
 import type { PlatformProductsResult } from '@/hooks/usePlatformCatalog';
 import { usePlatformProducts } from '@/hooks/usePlatformCatalog';
+import { useRequireLogin } from '@/hooks/useRequireLogin';
 
 const ProductDetailPage = () => {
   const { id } = useParams();
@@ -41,6 +42,7 @@ const ProductDetailPage = () => {
   const { addToCart, toggleWishlist, isInWishlist } = useCart();
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
+  const requireLogin = useRequireLogin();
 
   useEffect(() => {
     if (product) addRecentlyViewedId(product.id);
@@ -60,6 +62,7 @@ const ProductDetailPage = () => {
   const wishlisted = isInWishlist(product.id);
 
   const handleAddToCart = () => {
+    if (requireLogin('Please login to add items to bag')) return;
     if (!selectedSize) { toast.error('Please select a size'); return; }
     if (!selectedColor && product.colors.length > 0) { toast.error('Please select a color'); return; }
     addToCart(product, selectedSize, selectedColor || product.colors[0]);
@@ -171,7 +174,10 @@ const ProductDetailPage = () => {
               <ShoppingBag size={18} /> Add to Bag
             </button>
             <button
-              onClick={() => toggleWishlist(product.id, { platformProductId: product.platformProductId, platformVariantId: product.platformVariantId })}
+              onClick={() => {
+                if (requireLogin('Please login to use wishlist')) return;
+                toggleWishlist(product.id, { platformProductId: product.platformProductId, platformVariantId: product.platformVariantId });
+              }}
               className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-semibold text-sm border font-body transition-colors ${
                 wishlisted ? 'bg-fashion-blush border-primary text-primary' : 'border-border text-foreground hover:border-primary'
               }`}

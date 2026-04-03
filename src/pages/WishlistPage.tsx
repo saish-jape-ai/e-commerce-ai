@@ -7,10 +7,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { platformApi } from '@/lib/platform/client';
 import { platformWishlistItemToUiProduct } from '@/lib/platform/mappers';
+import { useRequireLogin } from '@/hooks/useRequireLogin';
 
 const WishlistPage = () => {
   const { accessToken, user } = useAuth();
   const { toggleWishlist, addToCart } = useCart();
+  const requireLogin = useRequireLogin();
 
   const wishlistQuery = useQuery({
     queryKey: ['platform', 'wishlist', { userId: user?.id }],
@@ -95,6 +97,7 @@ const WishlistPage = () => {
               </div>
               <button
                 onClick={() => {
+                  if (requireLogin('Please login to add items to bag')) return;
                   addToCart(product, product.sizes[0], product.colors[0]);
                   toast.success('Moved to bag!');
                 }}
