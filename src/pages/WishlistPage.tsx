@@ -1,15 +1,49 @@
 import { Link } from 'react-router-dom';
 import { Heart, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
-import { products } from '@/data/products';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { platformApi } from '@/lib/platform/client';
+import { platformWishlistItemToUiProduct } from '@/lib/platform/mappers';
 
 const WishlistPage = () => {
-  const { wishlist, toggleWishlist, addToCart } = useCart();
-  const wishlistProducts = products.filter(p => wishlist.includes(p.id));
+  const { accessToken, user } = useAuth();
+  const { toggleWishlist, addToCart } = useCart();
 
-  if (wishlistProducts.length === 0) {
+  const wishlistQuery = useQuery({
+    queryKey: ['platform', 'wishlist', { userId: user?.id }],
+    enabled: Boolean(accessToken && user?.id),
+    queryFn: ({ signal }) => platformApi.wishlistList({ accessToken: accessToken!, userId: user!.id, signal }),
+    staleTime: 1000 * 30,
+  });
+
+  const wishlistProducts =
+    wishlistQuery.data?.wishlists?.flatMap(w => (w.items || []).map(platformWishlistItemToUiProduct)) ?? [];
+
+  if (!accessToken || !user?.id) {
+    return (
+      <div className="container mx-auto py-20 text-center">
+        <Heart size={64} className="mx-auto text-muted-foreground mb-4" />
+        <h1 className="text-2xl font-display font-bold text-foreground mb-2">Login to view your wishlist</h1>
+        <p className="text-muted-foreground mb-6 font-body">Your wishlist is stored in your Platform account.</p>
+        <Link to="/login" className="inline-flex items-center gap-2 fashion-gradient text-primary-foreground px-8 py-3 rounded-full font-semibold text-sm font-body">
+          Login <ArrowRight size={16} />
+        </Link>
+      </div>
+    );
+  }
+
+  if (wishlistQuery.isLoading) {
+    return (
+      <div className="container mx-auto py-20 text-center">
+        <p className="text-sm text-muted-foreground font-body">Loading wishlist…</p>
+      </div>
+    );
+  }
+
+  if (wishlistQuery.isError || wishlistProducts.length === 0) {
     return (
       <div className="container mx-auto py-20 text-center">
         <Heart size={64} className="mx-auto text-muted-foreground mb-4" />
@@ -45,7 +79,7 @@ const WishlistPage = () => {
               </div>
             </Link>
             <button
-              onClick={() => toggleWishlist(product.id)}
+              onClick={() => toggleWishlist(product.id, { platformProductId: product.platformProductId, platformVariantId: product.platformVariantId })}
               className="absolute top-3 right-3 p-1.5 bg-background/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-background transition-colors"
             >
               <Heart size={16} className="fill-primary text-primary" />

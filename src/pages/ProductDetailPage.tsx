@@ -1,16 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Heart, ShoppingBag, Star, Truck, RotateCcw, Shield, ChevronRight } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
-import { products } from '@/data/products';
+import type { Product } from '@/data/products';
 import ProductCard from '@/components/ProductCard';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { addRecentlyViewedId } from '@/lib/recentlyViewed';
+import { useQueryClient } from '@tanstack/react-query';
+import type { PlatformProductsResult } from '@/hooks/usePlatformCatalog';
+import { usePlatformProducts } from '@/hooks/usePlatformCatalog';
 
 const ProductDetailPage = () => {
   const { id } = useParams();
-  const product = products.find(p => p.id === id);
+  const queryClient = useQueryClient();
+
+  const platformProducts = useMemo(() => {
+    const entries = queryClient.getQueriesData({ queryKey: ['platform', 'products'] });
+    const all: Product[] = [];
+    for (const [, data] of entries) {
+      const cast = data as PlatformProductsResult | undefined;
+      if (cast?.ui?.length) all.push(...cast.ui);
+    }
+    return all;
+  }, [queryClient]);
+
+  const platformProduct = useMemo(
+    () => platformProducts.find(p => p.id === id),
+    [id, platformProducts]
+  );
+
+  const fallbackQuery = usePlatformProducts({ k: '', limit: 200, offset: 0 });
+  const fallbackProduct = useMemo(
+    () => (fallbackQuery.data?.ui ?? []).find(p => p.id === id),
+    [fallbackQuery.data, id]
+  );
+
+  const product = platformProduct || fallbackProduct;
+  const sourceProducts = platformProduct ? platformProducts : (fallbackQuery.data?.ui ?? []);
   const { addToCart, toggleWishlist, isInWishlist } = useCart();
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
@@ -23,12 +50,13 @@ const ProductDetailPage = () => {
     return (
       <div className="container mx-auto py-20 text-center">
         <h1 className="text-2xl font-display font-bold">Product Not Found</h1>
+        <p className="text-sm text-muted-foreground font-body mt-2">This product may not be in the currently loaded page.</p>
         <Link to="/products" className="text-primary mt-4 inline-block font-body">← Back to Products</Link>
       </div>
     );
   }
 
-  const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
+  const relatedProducts = sourceProducts.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
   const wishlisted = isInWishlist(product.id);
 
   const handleAddToCart = () => {
@@ -143,7 +171,7 @@ const ProductDetailPage = () => {
               <ShoppingBag size={18} /> Add to Bag
             </button>
             <button
-              onClick={() => toggleWishlist(product.id)}
+              onClick={() => toggleWishlist(product.id, { platformProductId: product.platformProductId, platformVariantId: product.platformVariantId })}
               className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-semibold text-sm border font-body transition-colors ${
                 wishlisted ? 'bg-fashion-blush border-primary text-primary' : 'border-border text-foreground hover:border-primary'
               }`}

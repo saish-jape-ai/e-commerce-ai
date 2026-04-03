@@ -4,13 +4,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-
-const mockOrders = [
-  { id: 'STY001', date: 'Mar 28, 2026', total: 2598, status: 'Delivered', items: 2, image: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=80&h=80&fit=crop' },
-  { id: 'STY002', date: 'Mar 15, 2026', total: 4299, status: 'In Transit', items: 1, image: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=80&h=80&fit=crop' },
-  { id: 'STY003', date: 'Feb 20, 2026', total: 1799, status: 'Delivered', items: 3, image: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=80&h=80&fit=crop' },
-  { id: 'STY004', date: 'Jan 10, 2026', total: 999, status: 'Returned', items: 1, image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=80&h=80&fit=crop' },
-];
+import { useQuery } from '@tanstack/react-query';
+import { platformApi } from '@/lib/platform/client';
+import type { PlatformOrdersListItem } from '@/lib/platform/types';
 
 const tabs = [
   { id: 'profile', label: 'Profile', icon: User },
@@ -21,8 +17,17 @@ const tabs = [
 
 const ProfilePage = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, accessToken, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
+
+  const ordersQuery = useQuery({
+    queryKey: ['platform', 'orders', { page: 1, limit: 10 }],
+    enabled: activeTab === 'orders' && Boolean(accessToken),
+    queryFn: ({ signal }) => platformApi.ordersList({ accessToken: accessToken!, page: 1, limit: 10, signal }).then(r => r.data),
+    staleTime: 1000 * 30,
+  });
+
+  const orders: PlatformOrdersListItem[] = Array.isArray(ordersQuery.data) ? (ordersQuery.data as PlatformOrdersListItem[]) : [];
 
   const initials = (user?.name || 'User')
     .split(' ')
@@ -146,27 +151,44 @@ const ProfilePage = () => {
                 <Link to="/track-order" className="text-sm text-primary font-semibold font-body hover:underline">Track Order →</Link>
               </div>
               <div className="space-y-4">
-                {mockOrders.map((order, i) => (
+                {ordersQuery.isLoading && (
+                  <div className="text-sm text-muted-foreground font-body">Loading orders…</div>
+                )}
+                {ordersQuery.isError && (
+                  <div className="text-sm text-destructive font-body">Failed to load orders.</div>
+                )}
+                {!ordersQuery.isLoading && !ordersQuery.isError && orders.length === 0 && (
+                  <div className="text-sm text-muted-foreground font-body">No orders found.</div>
+                )}
+
+                {orders.map((order, i) => (
                   <motion.div
-                    key={order.id}
+                    key={order.order_id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.1 }}
                     className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-center gap-4">
-                      <img src={order.image} alt="" className="w-16 h-16 rounded-lg object-cover" loading="lazy" />
+                      <img
+                        src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=80&h=80&fit=crop"
+                        alt=""
+                        className="w-16 h-16 rounded-lg object-cover"
+                        loading="lazy"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-foreground font-body">{order.id}</span>
+                          <span className="text-sm font-bold text-foreground font-body">{order.bill_number || order.order_id}</span>
                           <span className={`text-xs font-bold px-2.5 py-1 rounded-full font-body ${
-                            order.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                            order.status === 'In Transit' ? 'bg-fashion-blush text-primary' :
+                            order.order_status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                            order.order_status === 'shipped' ? 'bg-fashion-blush text-primary' :
                             'bg-orange-100 text-orange-700'
-                          }`}>{order.status}</span>
+                          }`}>{order.order_status}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground font-body mt-1">{order.date} • {order.items} items</p>
-                        <p className="text-sm font-bold text-foreground font-body mt-1">₹{order.total.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground font-body mt-1">
+                          {new Date(order.order_date).toLocaleDateString()} • Payment: {order.payment_status}
+                        </p>
+                        <p className="text-sm font-bold text-foreground font-body mt-1">₹{Number(order.grand_total).toLocaleString()}</p>
                       </div>
                       <ChevronRight size={20} className="text-muted-foreground" />
                     </div>

@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, ArrowRight, Sparkles, Truck, RotateCcw, Shield, Tag, Star, TrendingUp } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import { products, categories, brands } from '@/data/products';
+import { usePlatformCategories, usePlatformProducts } from '@/hooks/usePlatformCatalog';
 import hero1 from '@/assets/hero-1.jpg';
 import hero2 from '@/assets/hero-2.jpg';
 import hero3 from '@/assets/hero-3.jpg';
@@ -29,11 +29,31 @@ const testimonials = [
 
 const Homepage = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const trendingProducts = products.filter(p => p.isTrending);
-  const newArrivals = products.filter(p => p.isNew);
-  const bestSellers = products.filter(p => p.tags.includes('bestseller')).slice(0, 8);
-  const ethnicWear = products.filter(p => p.category === 'Ethnic').slice(0, 4);
-  const beautyProducts = products.filter(p => p.category === 'Beauty').slice(0, 4);
+  const productsQuery = usePlatformProducts({ k: '', limit: 80, offset: 0 });
+  const categoriesQuery = usePlatformCategories();
+
+  const products = useMemo(() => productsQuery.data?.ui ?? [], [productsQuery.data]);
+
+  const trendingProducts = useMemo(() => products.filter(p => p.isTrending).slice(0, 10), [products]);
+  const newArrivals = useMemo(() => products.filter(p => p.isNew).slice(0, 12), [products]);
+  const bestSellers = useMemo(() => products.filter(p => p.tags.includes('bestseller')).slice(0, 8), [products]);
+  const ethnicWear = useMemo(() => products.filter(p => p.category.toLowerCase() === 'ethnic').slice(0, 4), [products]);
+  const beautyProducts = useMemo(() => products.filter(p => p.category.toLowerCase() === 'beauty').slice(0, 4), [products]);
+
+  const categoryCards = useMemo(() => {
+    const cats = categoriesQuery.data || [];
+    const placeholder = (seed: string) =>
+      `https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=300&h=300&fit=crop&auto=format&q=70&sig=${encodeURIComponent(seed)}`;
+    return cats.map(c => {
+      const count = products.filter(p => p.category === c.category_name).length;
+      return {
+        id: c.id,
+        name: c.category_name,
+        image: c.presigned_image_url || placeholder(c.id),
+        count,
+      };
+    });
+  }, [categoriesQuery.data, products]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentSlide(prev => (prev + 1) % heroSlides.length), 5000);
@@ -98,14 +118,14 @@ const Homepage = () => {
           <p className="text-muted-foreground mt-2 font-body">Find your perfect style</p>
         </div>
         <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
-          {categories.map((cat, i) => (
-            <motion.div key={cat.slug} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }}>
-              <Link to={`/products?category=${cat.slug}`} className="group block text-center">
+          {categoryCards.map((cat, i) => (
+            <motion.div key={cat.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }}>
+              <Link to={`/products?category=${encodeURIComponent(cat.name)}`} className="group block text-center">
                 <div className="relative overflow-hidden rounded-full aspect-square w-20 h-20 mx-auto mb-2 border-2 border-transparent group-hover:border-primary transition-colors">
                   <img src={cat.image} alt={cat.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 </div>
                 <p className="text-xs font-semibold text-foreground font-body">{cat.name}</p>
-                <p className="text-[10px] text-muted-foreground font-body">{cat.count}+ items</p>
+                <p className="text-[10px] text-muted-foreground font-body">{cat.count} items</p>
               </Link>
             </motion.div>
           ))}
@@ -154,29 +174,7 @@ const Homepage = () => {
         </div>
       </section>
 
-      {/* Featured Brands */}
-      <section className="bg-muted py-12">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-display font-bold text-foreground text-center mb-2">Featured Brands</h2>
-          <p className="text-muted-foreground text-center font-body mb-8">Shop from your favorite brands at the best prices</p>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-            {brands.slice(0, 12).map((brand, i) => (
-              <motion.div
-                key={brand.name}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.03 }}
-              >
-                <Link to={`/products?brand=${brand.name.toLowerCase()}`} className="bg-background rounded-xl p-4 flex flex-col items-center justify-center hover-lift cursor-pointer text-center min-h-[80px]">
-                  <span className="text-base font-bold text-foreground font-body">{brand.logo}</span>
-                  <span className="text-[10px] text-primary font-semibold font-body mt-1">{brand.discount}</span>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Featured Brands removed (API doesn't expose brands reliably) */}
 
       {/* Best Sellers */}
       <section className="container mx-auto py-12 px-4">
@@ -207,7 +205,7 @@ const Homepage = () => {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-display font-bold text-foreground">Ethnic Wear</h3>
-                  <Link to="/products?category=ethnic" className="text-xs font-semibold text-primary hover:underline font-body">View All →</Link>
+                  <Link to="/products?category=Ethnic" className="text-xs font-semibold text-primary hover:underline font-body">View All →</Link>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {ethnicWear.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
@@ -218,7 +216,7 @@ const Homepage = () => {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-display font-bold text-foreground">Beauty & Skincare</h3>
-                  <Link to="/products?category=beauty" className="text-xs font-semibold text-primary hover:underline font-body">View All →</Link>
+                  <Link to="/products?category=Beauty" className="text-xs font-semibold text-primary hover:underline font-body">View All →</Link>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {beautyProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}

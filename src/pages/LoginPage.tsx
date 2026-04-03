@@ -14,21 +14,19 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      try {
-        login({ email, password });
-        toast.success('Login successful! Welcome back.');
-        const from = (location.state as { from?: string } | null)?.from;
-        navigate(from || '/profile', { replace: true });
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Login failed');
-      } finally {
-        setIsLoading(false);
-      }
-    }, 500);
+    try {
+      await login({ email, password });
+      toast.success('Login successful! Welcome back.');
+      const from = (location.state as { from?: string } | null)?.from;
+      navigate(from || '/profile', { replace: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

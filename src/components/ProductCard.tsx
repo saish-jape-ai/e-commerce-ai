@@ -75,7 +75,10 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       {/* Wishlist button with animation */}
       <motion.button
         whileTap={{ scale: 0.8 }}
-        onClick={(e) => { e.preventDefault(); toggleWishlist(product.id); }}
+        onClick={(e) => {
+          e.preventDefault();
+          toggleWishlist(product.id, { platformProductId: product.platformProductId, platformVariantId: product.platformVariantId });
+        }}
         className="absolute top-3 right-3 p-2 bg-background/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-background transition-colors z-10"
       >
         <Heart size={16} className={`transition-colors ${wishlisted ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />

@@ -13,21 +13,19 @@ const SignupPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (step === 1) { setStep(2); return; }
     setIsLoading(true);
-    setTimeout(() => {
-      try {
-        signup(form);
-        toast.success('Account created successfully! Welcome to Stylora.');
-        navigate('/profile', { replace: true });
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Signup failed');
-      } finally {
-        setIsLoading(false);
-      }
-    }, 500);
+    try {
+      await signup(form);
+      toast.success('Account created successfully! Welcome to Stylora.');
+      navigate('/profile', { replace: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Signup failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const updateField = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));
