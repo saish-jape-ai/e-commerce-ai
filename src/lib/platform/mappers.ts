@@ -1,5 +1,5 @@
 import type { Product } from '@/data/products';
-import type { PlatformProduct } from './types';
+import type { PlatformProduct, PlatformProductDetail } from './types';
 
 const stripHtml = (value: string) => value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -65,6 +65,75 @@ export const platformProductToUiProduct = (p: PlatformProduct): Product => {
     colors: colors.length ? colors : ['Default'],
     rating: 0,
     reviews: 0,
+    description: description || '—',
+    tags: tagNames,
+    isNew,
+    isTrending,
+    platformProductId: p.product_id,
+    platformVariantId: variant?.product_variant_id ?? null,
+  };
+};
+
+const pickMasterVariantFromDetail = (p: PlatformProductDetail) => p.variants.find(v => v.is_master_variant) || p.variants[0];
+
+export const platformProductDetailToUiProduct = (p: PlatformProductDetail): Product => {
+  const variant = pickMasterVariantFromDetail(p);
+  const price = variant?.discounted_price ?? variant?.regular_price ?? variant?.member_price ?? 0;
+  const originalPrice = variant?.market_price ?? variant?.regular_price ?? price;
+  const discount =
+    (typeof variant?.total_discount_percentage === 'number' && Number.isFinite(variant.total_discount_percentage))
+      ? Math.round(variant.total_discount_percentage)
+      : originalPrice > 0
+        ? Math.round(((originalPrice - price) / originalPrice) * 100)
+        : 0;
+
+  const productImages = (p.media || []).map(m => m.media_url);
+  const variantImages = (variant?.media || []).map(m => m.media_url);
+  const images = uniq([...productImages, ...variantImages]);
+  const image = images[0] || placeholderImage(p.product_id);
+
+  const colors = uniq(
+    (p.variants || [])
+      .map(v => v.options?.color)
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+  );
+
+  const sizes = uniq(
+    (p.variants || [])
+      .map(v => v.options?.size)
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+  );
+
+  const descriptionRaw = p.value?.description || '';
+  const description = descriptionRaw.includes('<') ? stripHtml(descriptionRaw) : descriptionRaw;
+
+  const category = p.product_category?.[0]?.name || 'Other';
+  const subcategory = p.product_subcategory?.[0]?.name || 'All';
+  const tagNames = uniq((p.tags || []).map(t => t.name));
+
+  const createdAt = Date.parse(p.created_at);
+  const isNew = Number.isFinite(createdAt) ? Date.now() - createdAt < 1000 * 60 * 60 * 24 * 14 : false;
+  const isTrending = discount >= 30;
+
+  const rating = p.rating?.average ?? 0;
+  const reviews = p.rating?.count ?? 0;
+
+  return {
+    id: p.product_id,
+    name: p.name,
+    brand: p.product_category?.[0]?.name || tagNames[0] || 'Brand',
+    price,
+    originalPrice,
+    discount: Math.max(0, discount),
+    image,
+    images: images.length ? images : undefined,
+    category,
+    subcategory,
+    gender: 'unisex',
+    sizes: sizes.length ? sizes : ['Default'],
+    colors: colors.length ? colors : ['Default'],
+    rating,
+    reviews,
     description: description || '—',
     tags: tagNames,
     isNew,

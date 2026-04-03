@@ -294,3 +294,57 @@ export type PlatformOrdersListItem = {
 };
 
 export type PlatformOrdersListResponse = PlatformApiResponse<PlatformOrdersListItem[]>;
+
+export type PlatformProductDetailVariant = {
+  sku: string | null;
+  media: PlatformMedia[];
+  barcode: string | null;
+  options: Record<string, string>;
+  quantity: number;
+  min_stock: number;
+  product_id: string;
+  buying_price: number | null;
+  market_price: number | null;
+  member_price: number | null;
+  regular_price: number | null;
+  inventory_status: string;
+  is_master_variant: boolean;
+  unique_identifier: string | null;
+  product_variant_id: string;
+  discounted_price: number | null;
+  applied_discounts: unknown[];
+  total_discount_percentage: number | null;
+};
+
+export type PlatformProductDetail = {
+  product_id: string;
+  name: string;
+  client_id: string;
+  value: { description: string; terms_and_conditions: string };
+  model: string | null;
+  sku: string | null;
+  hsn_number: string | null;
+  slug: string | null;
+  unique_number: string | null;
+  gst: number | null;
+  characteristics: string[];
+  unit_of_measure: string | null;
+  currency: string | null;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  make_to_order: boolean;
+  is_active: boolean;
+  total_quantity: number;
+  min_stock: number;
+  inventory_status: string;
+  tags: PlatformTag[];
+  variants: PlatformProductDetailVariant[];
+  rating?: { average: number | null; count: number; reviews: unknown[] };
+  product_category: PlatformProductCategoryRef[];
+  product_subcategory: PlatformProductCategoryRef[];
+  media: PlatformMedia[];
+  in_wishlist?: boolean;
+};
+
+export type PlatformProductDetailResponse = PlatformApiResponse<PlatformProductDetail>;

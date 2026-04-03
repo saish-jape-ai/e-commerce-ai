@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { platformApi } from '@/lib/platform/client';
-import { platformProductToUiProduct } from '@/lib/platform/mappers';
-import type { PlatformCategory, PlatformProduct } from '@/lib/platform/types';
+import { platformProductDetailToUiProduct, platformProductToUiProduct } from '@/lib/platform/mappers';
+import type { PlatformCategory, PlatformProduct, PlatformProductDetail } from '@/lib/platform/types';
 import type { Product } from '@/data/products';
 
 export const platformQueryKeys = {
   categories: (input: { k: string; clientId?: string }) => ['platform', 'categories', input] as const,
   products: (input: { k: string; clientId?: string; limit?: number; offset?: number }) => ['platform', 'products', input] as const,
+  productDetail: (input: { productId: string; clientId?: string }) => ['platform', 'product', input] as const,
 };
 
 export const usePlatformCategories = (input?: { k?: string; clientId?: string }) => {
@@ -63,5 +64,18 @@ export const usePlatformCategoryOptions = (categories?: PlatformCategory[]) => {
     uniq.sort((a, b) => a.localeCompare(b));
     return uniq;
   }, [categories]);
+};
+
+export const usePlatformProductDetail = (productId: string | undefined, input?: { clientId?: string; k?: string }) => {
+  return useQuery({
+    queryKey: platformQueryKeys.productDetail({ productId: productId || '', clientId: input?.clientId }),
+    enabled: Boolean(productId),
+    queryFn: async ({ signal }) => {
+      const res = await platformApi.publicProductDetail({ productId: productId!, clientId: input?.clientId, k: input?.k, signal });
+      const raw = res.data as PlatformProductDetail;
+      return { raw, ui: platformProductDetailToUiProduct(raw) };
+    },
+    staleTime: 1000 * 30,
+  });
 };
 
