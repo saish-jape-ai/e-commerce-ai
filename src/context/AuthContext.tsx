@@ -1,125 +1,95 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { storageGetJson, storageSetJson } from '@/lib/storage';
+import { platformApi } from '@/lib/platform/client';
 
 export interface AuthUser {
   id: string;
+  firstName: string;
+  lastName: string;
   name: string;
   email: string;
   phone?: string;
-  createdAt: string;
+  status?: string;
 }
 
-interface StoredUser extends AuthUser {
-  password: string;
-}
+type StoredSession = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  user: AuthUser;
+};
 
 interface AuthContextType {
   user: AuthUser | null;
+  accessToken: string | null;
   isAuthenticated: boolean;
-  signup: (input: { name: string; email: string; phone?: string; password: string }) => void;
-  login: (input: { email: string; password: string }) => void;
+  signup: (input: { name: string; email: string; phone?: string; password: string }) => Promise<void>;
+  login: (input: { email: string; password: string }) => Promise<void>;
   logout: () => void;
 }
 
-const USERS_KEY = 'stylora_users_v1';
-const SESSION_KEY = 'stylora_session_v1';
+const SESSION_KEY = 'platform_session_v1';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const normalizeEmail = (email: string) => email.trim().toLowerCase();
-
-const readUsers = () => {
-  const users = storageGetJson<StoredUser[]>(USERS_KEY);
-  return Array.isArray(users) ? users : [];
-};
-
-const writeUsers = (users: StoredUser[]) => storageSetJson(USERS_KEY, users);
-
-const readSession = () => storageGetJson<{ userId: string } | null>(SESSION_KEY);
-const writeSession = (session: { userId: string } | null) => storageSetJson(SESSION_KEY, session);
-
-const makeId = () => {
-  // Crypto isn't guaranteed in every environment; fallback is fine for demo.
-  const rnd = Math.random().toString(16).slice(2);
-  return `usr_${Date.now().toString(16)}_${rnd}`;
-};
+const readSession = () => storageGetJson<StoredSession | null>(SESSION_KEY);
+const writeSession = (session: StoredSession | null) => storageSetJson(SESSION_KEY, session);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<StoredSession | null>(null);
 
   useEffect(() => {
-    const session = readSession();
-    if (!session?.userId) return;
-
-    const users = readUsers();
-    const found = users.find(u => u.id === session.userId);
-    if (found) {
-      const { password: _password, ...safeUser } = found;
-      setUser(safeUser);
-    } else {
-      writeSession(null);
-    }
+    const stored = readSession();
+    if (stored?.accessToken && stored?.user) setSession(stored);
   }, []);
 
-  const signup = useCallback((input: { name: string; email: string; phone?: string; password: string }) => {
-    const name = input.name.trim();
-    const email = normalizeEmail(input.email);
-    const phone = input.phone?.trim();
-    const password = input.password;
-
-    if (!name) throw new Error('Please enter your name');
-    if (!email || !email.includes('@')) throw new Error('Please enter a valid email');
-    if (!password || password.length < 8) throw new Error('Password must be at least 8 characters');
-
-    const users = readUsers();
-    if (users.some(u => normalizeEmail(u.email) === email)) throw new Error('Email already registered. Please sign in.');
-
-    const createdAt = new Date().toISOString();
-    const newUser: StoredUser = {
-      id: makeId(),
-      name,
-      email,
-      phone: phone || undefined,
-      password,
-      createdAt,
-    };
-
-    writeUsers([newUser, ...users]);
-    writeSession({ userId: newUser.id });
-
-    const { password: _password, ...safeUser } = newUser;
-    setUser(safeUser);
+  const signup = useCallback(async () => {
+    throw new Error('Signup is not available. Please login with your Platform account.');
   }, []);
 
-  const login = useCallback((input: { email: string; password: string }) => {
-    const email = normalizeEmail(input.email);
+  const login = useCallback(async (input: { email: string; password: string }) => {
+    const email = input.email.trim();
     const password = input.password;
-
     if (!email || !email.includes('@')) throw new Error('Please enter a valid email');
     if (!password) throw new Error('Please enter your password');
 
-    const users = readUsers();
-    const found = users.find(u => normalizeEmail(u.email) === email);
-    if (!found) throw new Error('No account found with this email');
-    if (found.password !== password) throw new Error('Incorrect password');
+    const res = await platformApi.login({ email, password });
+    const expiresAt = new Date(Date.now() + res.expires_in * 1000).toISOString();
 
-    writeSession({ userId: found.id });
-    const { password: _password, ...safeUser } = found;
-    setUser(safeUser);
+    const user: AuthUser = {
+      id: res.user.id,
+      firstName: res.user.first_name,
+      lastName: res.user.last_name,
+      name: `${res.user.first_name} ${res.user.last_name}`.trim(),
+      email: res.user.email,
+      phone: res.user.phone,
+      status: res.user.status,
+    };
+
+    const next: StoredSession = {
+      accessToken: res.access_token,
+      refreshToken: res.refresh_token,
+      expiresAt,
+      user,
+    };
+
+    writeSession(next);
+    setSession(next);
   }, []);
 
   const logout = useCallback(() => {
     writeSession(null);
-    setUser(null);
+    setSession(null);
   }, []);
 
   const value = useMemo<AuthContextType>(() => ({
-    user,
-    isAuthenticated: Boolean(user),
+    user: session?.user ?? null,
+    accessToken: session?.accessToken ?? null,
+    isAuthenticated: Boolean(session?.accessToken),
     signup,
     login,
     logout,
-  }), [login, logout, signup, user]);
+  }), [login, logout, session, signup]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

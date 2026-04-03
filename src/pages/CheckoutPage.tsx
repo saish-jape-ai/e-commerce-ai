@@ -6,11 +6,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { evaluateCoupon } from '@/lib/coupons';
 import { storageGetJson } from '@/lib/storage';
-
-const savedAddresses = [
-  { id: '1', name: 'Rahul Sharma', phone: '+91 98765 43210', line1: '42, Park Street', line2: 'Sector 15, Gurugram', city: 'Gurugram', state: 'Haryana', pin: '122001', type: 'Home' },
-  { id: '2', name: 'Rahul Sharma', phone: '+91 98765 43210', line1: 'Office 204, Tower B', line2: 'Cyber City, DLF Phase 2', city: 'Gurugram', state: 'Haryana', pin: '122002', type: 'Work' },
-];
+import { useAuth } from '@/context/AuthContext';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { platformApi } from '@/lib/platform/client';
+import type { PlatformUserAddress } from '@/lib/platform/types';
+import { getPlatformConfig } from '@/lib/platform/config';
 
 const paymentMethods = [
   { id: 'upi', label: 'UPI', desc: 'Google Pay, PhonePe, Paytm', icon: '📱' },
@@ -19,14 +19,76 @@ const paymentMethods = [
   { id: 'wallet', label: 'Wallet', desc: 'Paytm, Amazon Pay', icon: '👛' },
 ];
 
+const addrKey = (a: PlatformUserAddress) =>
+  [
+    a.type,
+    a.tag,
+    a.house_no,
+    a.house,
+    a.village,
+    a.street,
+    a.locality,
+    a.city,
+    a.state,
+    a.country,
+    a.zip_code,
+    a.zipcode,
+  ].filter(Boolean).join('|');
+
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { items, totalPrice, clearCart } = useCart();
+  const { accessToken, user } = useAuth();
   const [step, setStep] = useState(1);
-  const [selectedAddress, setSelectedAddress] = useState(savedAddresses[0].id);
+  const [selectedAddressKey, setSelectedAddressKey] = useState<string>('');
+  const [showAddAddress, setShowAddAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState<PlatformUserAddress>({
+    type: 'D',
+    tag: 'Home',
+    house_no: '',
+    village: '',
+    street: '',
+    locality: '',
+    city: '',
+    state: '',
+    country: 'India',
+    zip_code: '',
+  });
   const [selectedPayment, setSelectedPayment] = useState('upi');
   const [isProcessing, setIsProcessing] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+
+  const userQuery = useQuery({
+    queryKey: ['platform', 'user', { userId: user?.id }],
+    enabled: Boolean(accessToken && user?.id),
+    queryFn: ({ signal }) => platformApi.userGet({ accessToken: accessToken!, userId: user!.id, signal }),
+    staleTime: 1000 * 15,
+  });
+
+  const savedAddresses = userQuery.data?.user?.user_address ?? [];
+
+  useEffect(() => {
+    if (!selectedAddressKey && savedAddresses.length > 0) {
+      setSelectedAddressKey(addrKey(savedAddresses[0]));
+    }
+  }, [savedAddresses, selectedAddressKey]);
+
+  const saveAddressMutation = useMutation({
+    mutationFn: async (next: PlatformUserAddress) => {
+      if (!accessToken || !user?.id) throw new Error('Please login to save address');
+      const existing = savedAddresses;
+      const nextList = [next, ...existing.filter(a => addrKey(a) !== addrKey(next))];
+      return platformApi.userUpdateProfileInfo({
+        accessToken,
+        userId: user.id,
+        userAddress: nextList,
+        addresses: nextList.map(a => ({ ...a, zipcode: a.zipcode || a.zip_code, house: a.house || a.house_no })),
+      });
+    },
+    onSuccess: () => {
+      userQuery.refetch();
+    },
+  });
 
   useEffect(() => {
     const stored = storageGetJson<string | null>('stylora_coupon_v1');
@@ -42,6 +104,82 @@ const CheckoutPage = () => {
   const discount = couponResult?.discountAmount || 0;
   const deliveryFee = couponResult?.freeShipping ? 0 : (totalPrice > 999 ? 0 : 99);
   const finalTotal = Math.max(0, totalPrice - discount + deliveryFee);
+  const selectedAddress = savedAddresses.find(a => addrKey(a) === selectedAddressKey) || null;
+
+  const orderMutation = useMutation({
+    mutationFn: async () => {
+      if (!accessToken || !user) throw new Error('Please login first');
+      if (!selectedAddress) throw new Error('Please select an address');
+
+      const cfg = getPlatformConfig();
+      const today = new Date();
+      const toYmd = (d: Date) => d.toISOString().slice(0, 10);
+      const addDays = (d: Date, days: number) => new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
+
+      const orderItems = items.map(i => {
+        const productId = i.product.platformProductId || i.product.id;
+        const variantId = i.product.platformVariantId ?? null;
+        if (!productId) throw new Error('Missing platform product id for an item');
+        return {
+          product_id: productId,
+          product_variant_id: variantId,
+          quantity: i.quantity,
+          discount_ids: [],
+          gst: 0,
+        };
+      });
+
+      const addr: PlatformUserAddress = {
+        type: selectedAddress.type,
+        tag: selectedAddress.tag,
+        house_no: selectedAddress.house_no || selectedAddress.house || '',
+        village: selectedAddress.village || '',
+        street: selectedAddress.street || '',
+        locality: selectedAddress.locality || '',
+        city: selectedAddress.city || '',
+        state: selectedAddress.state || '',
+        country: selectedAddress.country || 'India',
+        zip_code: selectedAddress.zip_code || selectedAddress.zipcode || '',
+      };
+
+      const billNumber = `INV${Date.now()}`;
+      const trackingNumber = `TRK${Date.now()}`;
+
+      return platformApi.orderCreate({
+        accessToken,
+        body: {
+          currency: 'INR',
+          bill_number: billNumber,
+          order_date: toYmd(today),
+          payment_method: selectedPayment,
+          payment_status: 'pending',
+          paid_amount: 0,
+          gst: 0,
+          shipping_fee: deliveryFee,
+          order_status: 'pending',
+          tracking_number: trackingNumber,
+          delivery_date: toYmd(addDays(today, 7)),
+          due_date: toYmd(addDays(today, 1)),
+          price_type: 'regular_price',
+          customer: {
+            first_name: user.firstName,
+            last_name: user.lastName,
+            phone_number: user.phone || '',
+            email: user.email,
+            country_code: '+91',
+          },
+          order_items: orderItems,
+          shipping_address: addr,
+          billing_address: addr,
+          client_id: cfg.ordersClientId,
+          user_id: user.id,
+          created_by: user.id,
+          updated_by: user.id,
+          payment_id: '',
+        },
+      });
+    },
+  });
 
   if (items.length === 0) {
     return (
@@ -52,13 +190,7 @@ const CheckoutPage = () => {
     );
   }
 
-  const handlePlaceOrder = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      clearCart();
-      navigate('/order-success');
-    }, 2500);
-  };
+  // Order placement is handled in step 3 via Platform API.
 
   const steps = [
     { num: 1, label: 'Address', icon: MapPin },
@@ -94,32 +226,163 @@ const CheckoutPage = () => {
               <motion.div key="address" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                 <h2 className="text-xl font-display font-bold text-foreground mb-4">Select Delivery Address</h2>
                 <div className="space-y-3">
-                  {savedAddresses.map(addr => (
-                    <label
-                      key={addr.id}
-                      className={`block border rounded-xl p-4 cursor-pointer transition-colors ${
-                        selectedAddress === addr.id ? 'border-primary bg-fashion-blush' : 'border-border hover:border-primary/50'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <input type="radio" name="address" checked={selectedAddress === addr.id} onChange={() => setSelectedAddress(addr.id)} className="accent-primary mt-1" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground font-body text-sm">{addr.name}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground px-2 py-0.5 rounded font-body">{addr.type}</span>
+                  {!accessToken && (
+                    <div className="border border-border rounded-xl p-4 text-sm text-muted-foreground font-body">
+                      Please <Link to="/login" className="text-primary font-semibold hover:underline">login</Link> to use saved addresses and place an order.
+                    </div>
+                  )}
+
+                  {userQuery.isLoading && (
+                    <div className="text-sm text-muted-foreground font-body">Loading addresses…</div>
+                  )}
+                  {userQuery.isError && (
+                    <div className="text-sm text-destructive font-body">Failed to load addresses.</div>
+                  )}
+
+                  {savedAddresses.map(addr => {
+                    const key = addrKey(addr);
+                    const line1 = [addr.house_no || addr.house, addr.street].filter(Boolean).join(', ');
+                    const line2 = [addr.village, addr.locality, addr.city].filter(Boolean).join(', ');
+                    const pin = addr.zip_code || addr.zipcode;
+
+                    return (
+                      <label
+                        key={key}
+                        className={`block border rounded-xl p-4 cursor-pointer transition-colors ${
+                          selectedAddressKey === key ? 'border-primary bg-fashion-blush' : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="radio"
+                            name="address"
+                            checked={selectedAddressKey === key}
+                            onChange={() => setSelectedAddressKey(key)}
+                            className="accent-primary mt-1"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-foreground font-body text-sm">{addr.tag || 'Address'}</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground px-2 py-0.5 rounded font-body">
+                                {addr.type}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1 font-body">{line1 || '—'}</p>
+                            <p className="text-sm text-muted-foreground font-body">{line2 || '—'}</p>
+                            <p className="text-sm text-muted-foreground font-body">{[addr.state, pin].filter(Boolean).join(' - ')}</p>
                           </div>
-                          <p className="text-sm text-muted-foreground mt-1 font-body">{addr.line1}, {addr.line2}</p>
-                          <p className="text-sm text-muted-foreground font-body">{addr.city}, {addr.state} - {addr.pin}</p>
-                          <p className="text-sm text-muted-foreground mt-1 font-body">Phone: {addr.phone}</p>
                         </div>
-                      </div>
-                    </label>
-                  ))}
-                  <button className="w-full border-2 border-dashed border-border rounded-xl p-4 text-sm text-primary font-semibold font-body hover:border-primary hover:bg-fashion-blush transition-colors flex items-center justify-center gap-2">
-                    <Plus size={16} /> Add New Address
+                      </label>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAddAddress(v => !v)}
+                    className="w-full border-2 border-dashed border-border rounded-xl p-4 text-sm text-primary font-semibold font-body hover:border-primary hover:bg-fashion-blush transition-colors flex items-center justify-center gap-2"
+                    disabled={!accessToken}
+                  >
+                    <Plus size={16} /> {showAddAddress ? 'Close' : 'Add New Address'}
                   </button>
+
+                  <AnimatePresence>
+                    {showAddAddress && (
+                      <motion.div
+                        key="add-address"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="border border-border rounded-xl p-4"
+                      >
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <input
+                            value={addressForm.tag || ''}
+                            onChange={e => setAddressForm(a => ({ ...a, tag: e.target.value }))}
+                            placeholder="Tag (Home/Work)"
+                            className="px-3 py-2 border border-border rounded-lg text-sm font-body bg-background"
+                          />
+                          <input
+                            value={addressForm.house_no || ''}
+                            onChange={e => setAddressForm(a => ({ ...a, house_no: e.target.value }))}
+                            placeholder="House No"
+                            className="px-3 py-2 border border-border rounded-lg text-sm font-body bg-background"
+                          />
+                          <input
+                            value={addressForm.street || ''}
+                            onChange={e => setAddressForm(a => ({ ...a, street: e.target.value }))}
+                            placeholder="Street"
+                            className="px-3 py-2 border border-border rounded-lg text-sm font-body bg-background"
+                          />
+                          <input
+                            value={addressForm.village || ''}
+                            onChange={e => setAddressForm(a => ({ ...a, village: e.target.value }))}
+                            placeholder="Village/Area"
+                            className="px-3 py-2 border border-border rounded-lg text-sm font-body bg-background"
+                          />
+                          <input
+                            value={addressForm.city || ''}
+                            onChange={e => setAddressForm(a => ({ ...a, city: e.target.value }))}
+                            placeholder="City"
+                            className="px-3 py-2 border border-border rounded-lg text-sm font-body bg-background"
+                          />
+                          <input
+                            value={addressForm.state || ''}
+                            onChange={e => setAddressForm(a => ({ ...a, state: e.target.value }))}
+                            placeholder="State"
+                            className="px-3 py-2 border border-border rounded-lg text-sm font-body bg-background"
+                          />
+                          <input
+                            value={addressForm.zip_code || ''}
+                            onChange={e => setAddressForm(a => ({ ...a, zip_code: e.target.value }))}
+                            placeholder="Zip Code"
+                            className="px-3 py-2 border border-border rounded-lg text-sm font-body bg-background"
+                          />
+                          <input
+                            value={addressForm.country || ''}
+                            onChange={e => setAddressForm(a => ({ ...a, country: e.target.value }))}
+                            placeholder="Country"
+                            className="px-3 py-2 border border-border rounded-lg text-sm font-body bg-background"
+                          />
+                        </div>
+
+                        <div className="flex gap-3 mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddAddress(false)}
+                            className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold font-body hover:bg-muted transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await saveAddressMutation.mutateAsync(addressForm);
+                                toast.success('Address saved');
+                                setShowAddAddress(false);
+                                setSelectedAddressKey(addrKey(addressForm));
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : 'Failed to save address');
+                              }
+                            }}
+                            className="flex-1 fashion-gradient text-primary-foreground py-3 rounded-xl font-semibold text-sm font-body hover:opacity-90 transition-opacity disabled:opacity-60"
+                            disabled={saveAddressMutation.isPending}
+                          >
+                            {saveAddressMutation.isPending ? 'Saving…' : 'Save Address'}
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-                <button onClick={() => setStep(2)} className="w-full mt-6 fashion-gradient text-primary-foreground py-3.5 rounded-xl font-semibold text-sm font-body hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!accessToken) { toast.error('Please login first'); return; }
+                    if (!selectedAddressKey) { toast.error('Please select an address'); return; }
+                    setStep(2);
+                  }}
+                  className="w-full mt-6 fashion-gradient text-primary-foreground py-3.5 rounded-xl font-semibold text-sm font-body hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                >
                   Continue to Payment <ChevronRight size={16} />
                 </button>
               </motion.div>
@@ -201,8 +464,20 @@ const CheckoutPage = () => {
                 <div className="flex gap-3 mt-6">
                   <button onClick={() => setStep(2)} className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold font-body hover:bg-muted transition-colors">Back</button>
                   <motion.button
-                    onClick={handlePlaceOrder}
-                    disabled={isProcessing}
+                    onClick={async () => {
+                      setIsProcessing(true);
+                      try {
+                        await orderMutation.mutateAsync();
+                        clearCart();
+                        toast.success('Order placed successfully');
+                        navigate('/order-success');
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Failed to place order');
+                      } finally {
+                        setIsProcessing(false);
+                      }
+                    }}
+                    disabled={isProcessing || orderMutation.isPending}
                     whileTap={{ scale: 0.98 }}
                     className="flex-1 fashion-gradient text-primary-foreground py-3.5 rounded-xl font-semibold text-sm font-body hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-60"
                   >

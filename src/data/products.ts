@@ -20,6 +20,8 @@ export interface Product {
   isNew?: boolean;
   material?: string;
   care?: string[];
+  platformProductId?: string;
+  platformVariantId?: string | null;
 }
 
 export const products: Product[] = [

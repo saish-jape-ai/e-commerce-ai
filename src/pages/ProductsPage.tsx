@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import { products, subcategoryMap } from '@/data/products';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { usePlatformCategories, usePlatformCategoryOptions, usePlatformProducts } from '@/hooks/usePlatformCatalog';
 import { motion, AnimatePresence } from 'framer-motion';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import { getRecentlyViewedIds } from '@/lib/recentlyViewed';
@@ -16,7 +17,6 @@ const sortOptions = [
 ];
 
 const genderFilters = ['All', 'Men', 'Women', 'Kids', 'Unisex'];
-const categoryFilters = ['All', 'Topwear', 'Bottomwear', 'Footwear', 'Accessories', 'Ethnic', 'Beauty'];
 
 const ProductsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,6 +30,33 @@ const ProductsPage = () => {
   const [query, setQuery] = useState('');
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
   const skipNextUrlSyncRef = useRef(true);
+
+  const debouncedQuery = useDebouncedValue(query, 350);
+  const categoriesQuery = usePlatformCategories();
+  const categoryOptionsFromApi = usePlatformCategoryOptions(categoriesQuery.data);
+  const productsQuery = usePlatformProducts({ k: debouncedQuery, limit: 50, offset: 0 });
+  const products = useMemo(() => productsQuery.data?.ui ?? [], [productsQuery.data]);
+
+  const subcategoryMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const p of products) {
+      const cat = p.category || 'Other';
+      const sub = p.subcategory || 'All';
+      if (!map[cat]) map[cat] = [];
+      if (sub && sub !== 'All') map[cat].push(sub);
+    }
+    Object.keys(map).forEach(cat => {
+      map[cat] = Array.from(new Set(map[cat])).sort((a, b) => a.localeCompare(b));
+    });
+    return map;
+  }, [products]);
+
+  const categoryFilters = useMemo(() => {
+    const derived = categoryOptionsFromApi.length
+      ? categoryOptionsFromApi
+      : Array.from(new Set(products.map(p => p.category).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    return ['All', ...derived];
+  }, [categoryOptionsFromApi, products]);
 
   const areSearchParamsEqual = (a: URLSearchParams, b: URLSearchParams) => {
     const aEntries = Array.from(a.entries()).sort(([ak, av], [bk, bv]) =>
@@ -67,14 +94,6 @@ const ProductsPage = () => {
     const maxParam = hasMax ? Number(params.get('max')) : 10000;
 
     const slugToGender: Record<string, string> = { men: 'Men', women: 'Women', kids: 'Kids', unisex: 'Unisex' };
-    const slugToCategory: Record<string, string> = {
-      topwear: 'Topwear',
-      bottomwear: 'Bottomwear',
-      footwear: 'Footwear',
-      accessories: 'Accessories',
-      ethnic: 'Ethnic',
-      beauty: 'Beauty',
-    };
 
     const normalizedGender =
       genderFilters.find(g => g.toLowerCase() === genderParam.toLowerCase()) ||
@@ -94,7 +113,6 @@ const ProductsPage = () => {
     const normalizedCategory =
       inferredCategory ||
       categoryFilters.find(c => c.toLowerCase() === categoryParam.toLowerCase()) ||
-      (slugToCategory[categoryParam.toLowerCase()] ?? undefined) ||
       'All';
 
     const normalizedSubcategory = subFromSubParam || subFromCategoryParam || 'All';
@@ -146,7 +164,7 @@ const ProductsPage = () => {
   const availableSubcategories = useMemo(() => {
     if (selectedCategory === 'All') return [];
     return subcategoryMap[selectedCategory] || [];
-  }, [selectedCategory]);
+  }, [selectedCategory, subcategoryMap]);
 
   const filtered = useMemo(() => {
     let result = [...products];
@@ -178,13 +196,13 @@ const ProductsPage = () => {
       case 'rating': result.sort((a, b) => b.rating - a.rating); break;
     }
     return result;
-  }, [query, selectedGender, selectedCategory, selectedSubcategory, priceRange, sortBy]);
+  }, [products, query, selectedGender, selectedCategory, selectedSubcategory, priceRange, sortBy]);
 
   const recentlyViewedProducts = useMemo(() => {
     if (recentlyViewedIds.length === 0) return [];
     const map = new Map(products.map(p => [p.id, p]));
     return recentlyViewedIds.map(id => map.get(id)).filter(Boolean);
-  }, [recentlyViewedIds]);
+  }, [products, recentlyViewedIds]);
 
   return (
     <div className="container mx-auto py-6 px-4">
@@ -272,6 +290,7 @@ const ProductsPage = () => {
             selectedSubcategory={selectedSubcategory}
             setSelectedSubcategory={setSelectedSubcategory}
             availableSubcategories={availableSubcategories}
+            categoryFilters={categoryFilters}
             priceRange={priceRange}
             setPriceRange={setPriceRange}
             onClearAll={onClearAll}
@@ -308,6 +327,7 @@ const ProductsPage = () => {
                   selectedSubcategory={selectedSubcategory}
                   setSelectedSubcategory={setSelectedSubcategory}
                   availableSubcategories={availableSubcategories}
+                  categoryFilters={categoryFilters}
                   priceRange={priceRange}
                   setPriceRange={setPriceRange}
                   onClearAll={() => { onClearAll(); setFiltersOpen(false); }}
@@ -319,6 +339,14 @@ const ProductsPage = () => {
 
         {/* Product Grid */}
         <div className="flex-1">
+          {(productsQuery.isLoading || categoriesQuery.isLoading) && (
+            <div className="py-10 text-sm text-muted-foreground font-body">Loading products…</div>
+          )}
+          {(productsQuery.isError || categoriesQuery.isError) && (
+            <div className="py-10 text-sm text-destructive font-body">
+              Failed to load products. Check `VITE_PLATFORM_BASE_URL` and client id env vars, then reload.
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map((product, i) => (
               <ProductCard key={product.id} product={product} index={i} />
@@ -343,6 +371,7 @@ interface FilterPanelProps {
   selectedSubcategory: string;
   setSelectedSubcategory: (v: string) => void;
   availableSubcategories: string[];
+  categoryFilters: string[];
   priceRange: [number, number];
   setPriceRange: (v: [number, number]) => void;
   onClearAll: () => void;
@@ -356,6 +385,7 @@ const FilterPanel = ({
   selectedSubcategory,
   setSelectedSubcategory,
   availableSubcategories,
+  categoryFilters,
   priceRange,
   setPriceRange,
   onClearAll,

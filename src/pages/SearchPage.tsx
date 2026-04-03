@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Sparkles, TrendingUp, Clock } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import { products } from '@/data/products';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { usePlatformProducts } from '@/hooks/usePlatformCatalog';
 
 const trendingSearches = ['Summer Dresses', 'White Sneakers', 'Slim Fit Shirts', 'Kurtas', 'Denim Jacket', 'Running Shoes'];
 const recentSearches = ['Blue jeans', 'Nike shoes', 'Floral dress'];
@@ -12,17 +13,13 @@ const SearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
   const [inputValue, setInputValue] = useState(query);
+  const debounced = useDebouncedValue(query, 350);
+  const productsQuery = usePlatformProducts({ k: debounced, limit: 50, offset: 0 });
 
   const results = useMemo(() => {
     if (!query) return [];
-    const q = query.toLowerCase();
-    return products.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.brand.toLowerCase().includes(q) ||
-      p.category.toLowerCase().includes(q) ||
-      p.tags.some(t => t.includes(q))
-    );
-  }, [query]);
+    return productsQuery.data?.ui ?? [];
+  }, [productsQuery.data, query]);
 
   const handleSearch = (val: string) => {
     setInputValue(val);
@@ -112,7 +109,9 @@ const SearchPage = () => {
             <p className="text-sm text-muted-foreground font-body mt-1">{results.length} products found</p>
           </div>
 
-          {results.length > 0 ? (
+          {productsQuery.isLoading ? (
+            <div className="py-10 text-sm text-muted-foreground font-body">Searching…</div>
+          ) : results.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {results.map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} />
