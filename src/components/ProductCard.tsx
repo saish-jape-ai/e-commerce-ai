@@ -4,6 +4,7 @@ import { useCart } from '@/context/CartContext';
 import type { Product } from '@/data/products';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useRequireLogin } from '@/hooks/useRequireLogin';
 
 interface ProductCardProps {
   product: Product;
@@ -13,6 +14,7 @@ interface ProductCardProps {
 const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
   const { toggleWishlist, isInWishlist, addToCart } = useCart();
   const wishlisted = isInWishlist(product.id);
+  const requireLogin = useRequireLogin();
 
   return (
     <motion.div
@@ -42,6 +44,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
               onClick={e => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (requireLogin('Please login to add items to bag')) return;
                 addToCart(product, product.sizes[0], product.colors[0]);
                 toast.success('Added to bag!');
               }}
@@ -77,6 +80,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
         whileTap={{ scale: 0.8 }}
         onClick={(e) => {
           e.preventDefault();
+          if (requireLogin('Please login to use wishlist')) return;
           toggleWishlist(product.id, { platformProductId: product.platformProductId, platformVariantId: product.platformVariantId });
         }}
         className="absolute top-3 right-3 p-2 bg-background/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-background transition-colors z-10"
