@@ -117,18 +117,27 @@ const Homepage = () => {
           <h2 className="text-3xl font-display font-bold text-foreground">Shop by Category</h2>
           <p className="text-muted-foreground mt-2 font-body">Find your perfect style</p>
         </div>
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
-          {categoryCards.map((cat, i) => (
-            <motion.div key={cat.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }}>
-              <Link to={`/products?category=${encodeURIComponent(cat.name)}`} className="group block text-center">
-                <div className="relative overflow-hidden rounded-full aspect-square w-20 h-20 mx-auto mb-2 border-2 border-transparent group-hover:border-primary transition-colors">
-                  <img src={cat.image} alt={cat.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                </div>
-                <p className="text-xs font-semibold text-foreground font-body">{cat.name}</p>
-                <p className="text-[10px] text-muted-foreground font-body">{cat.count} items</p>
-              </Link>
-            </motion.div>
-          ))}
+        <div className="overflow-x-scroll overflow-y-hidden pb-3">
+          <div className="flex gap-5 min-w-max px-1">
+            {categoryCards.map((cat, i) => (
+              <motion.div
+                key={cat.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.03 }}
+                className="shrink-0 w-24"
+              >
+                <Link to={`/products?category=${encodeURIComponent(cat.name)}`} className="group block text-center">
+                  <div className="relative overflow-hidden rounded-full aspect-square w-20 h-20 mx-auto mb-2 border-2 border-transparent group-hover:border-primary transition-colors">
+                    <img src={cat.image} alt={cat.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  </div>
+                  <p className="text-xs font-semibold text-foreground font-body line-clamp-1">{cat.name}</p>
+                  <p className="text-[10px] text-muted-foreground font-body">{cat.count} items</p>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
