@@ -1,42 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, ShoppingBag, Heart, User, Menu, X, ChevronDown } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import { usePlatformCategories, usePlatformSubcategories } from '@/hooks/usePlatformCatalog';
+import type { PlatformCategory } from '@/lib/platform/types';
 
-const megaMenuData = {
-  Men: {
-    Topwear: ['T-Shirts', 'Shirts', 'Jackets', 'Sweatshirts'],
-    Bottomwear: ['Jeans', 'Trousers', 'Joggers', 'Shorts'],
-    Footwear: ['Sneakers', 'Formal Shoes', 'Sports Shoes', 'Sandals'],
-    Accessories: ['Watches', 'Sunglasses', 'Bags', 'Belts'],
-  },
-  Women: {
-    Topwear: ['Tops', 'Dresses', 'Kurtas', 'Jackets'],
-    Bottomwear: ['Jeans', 'Palazzos', 'Skirts', 'Leggings'],
-    Footwear: ['Heels', 'Flats', 'Sneakers', 'Boots'],
-    Accessories: ['Handbags', 'Jewelry', 'Scarves', 'Sunglasses'],
-  },
-  Kids: {
-    Boys: ['T-Shirts', 'Jeans', 'Shorts', 'Shoes'],
-    Girls: ['Dresses', 'Tops', 'Skirts', 'Shoes'],
-    Infants: ['Rompers', 'Sets', 'Bodysuits'],
-  },
-  Beauty: {
-    Makeup: ['Lipstick', 'Foundation', 'Mascara', 'Eyeshadow'],
-    Skincare: ['Moisturizer', 'Serum', 'Sunscreen', 'Cleanser'],
-    Haircare: ['Shampoo', 'Conditioner', 'Hair Oil', 'Masks'],
-  },
-};
-
-type MenuKey = keyof typeof megaMenuData;
-
-const buildProductsLink = (input: { gender?: string; category?: string; sub?: string; q?: string }) => {
+const buildProductsLink = (input: { category?: string; sub?: string; q?: string }) => {
   const params = new URLSearchParams();
   if (input.q) params.set('q', input.q);
-  if (input.gender) params.set('gender', input.gender.toLowerCase());
   if (input.category) params.set('category', input.category);
   if (input.sub) params.set('sub', input.sub);
   const qs = params.toString();
@@ -48,11 +22,21 @@ const Header = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const categoriesQuery = usePlatformCategories();
+  const categories = categoriesQuery.data ?? [];
+  const topCategories = useMemo(() => categories.slice(0, 5), [categories]);
+  const moreCategories = useMemo(() => categories.slice(5), [categories]);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
+  const [activeCategory, setActiveCategory] = useState<Pick<PlatformCategory, 'id' | 'category_name'> | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileActiveCategoryId, setMobileActiveCategoryId] = useState<string | null>(null);
+
+  const subcategoriesQuery = usePlatformSubcategories(activeCategory?.id);
+  const mobileSubcategoriesQuery = usePlatformSubcategories(mobileActiveCategoryId);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -63,6 +47,8 @@ const Header = () => {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setUserMenuOpen(false);
+      if (e.key === 'Escape') setMoreOpen(false);
+      if (e.key === 'Escape') setActiveCategory(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -72,6 +58,11 @@ const Header = () => {
     if (location.pathname !== '/products') return;
     const params = new URLSearchParams(location.search);
     setSearchValue(params.get('q') || '');
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    setMoreOpen(false);
+    setActiveCategory(null);
   }, [location.pathname, location.search]);
 
   const onLogout = () => {
@@ -86,8 +77,14 @@ const Header = () => {
     const q = searchValue.trim();
     const params = new URLSearchParams();
     if (q) params.set('q', q);
-    setActiveMenu(null);
+    setActiveCategory(null);
+    setMoreOpen(false);
     navigate(params.toString() ? `/products?${params.toString()}` : '/products');
+  };
+
+  const toggleCategory = (category: Pick<PlatformCategory, 'id' | 'category_name'>) => {
+    setMoreOpen(false);
+    setActiveCategory((prev) => (prev?.id === category.id ? null : category));
   };
 
   return (
@@ -112,18 +109,64 @@ const Header = () => {
 
             {/* Desktop Nav */}
             <nav className="hidden lg:flex items-center gap-1 h-full">
-              {(Object.keys(megaMenuData) as MenuKey[]).map(key => (
-                <div
-                  key={key}
-                  className="relative h-full flex items-center"
-                  onMouseEnter={() => setActiveMenu(key)}
-                  onMouseLeave={() => setActiveMenu(null)}
-                >
-                  <button className={`px-4 py-2 text-sm font-semibold font-body tracking-wide uppercase transition-colors hover:text-primary ${activeMenu === key ? 'text-primary border-b-2 border-primary' : 'text-foreground'}`}>
-                    {key}
+              {topCategories.map((cat) => (
+                <div key={cat.id} className="relative h-full flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory({ id: cat.id, category_name: cat.category_name })}
+                    className={`px-4 py-2 text-sm font-semibold font-body tracking-wide uppercase transition-colors hover:text-primary ${activeCategory?.id === cat.id ? 'text-primary border-b-2 border-primary' : 'text-foreground'}`}
+                  >
+                    {cat.category_name}
                   </button>
                 </div>
               ))}
+
+              {moreCategories.length > 0 && (
+                <div className="relative h-full flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(v => !v);
+                      setActiveCategory(null);
+                    }}
+                    className={`px-4 py-2 text-sm font-semibold font-body tracking-wide uppercase transition-colors hover:text-primary flex items-center gap-1 ${moreOpen ? 'text-primary border-b-2 border-primary' : 'text-foreground'}`}
+                    aria-haspopup="menu"
+                    aria-expanded={moreOpen}
+                  >
+                    More <ChevronDown size={16} className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {moreOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute left-0 top-full mt-2 w-64 bg-background border border-border rounded-xl shadow-lg overflow-hidden z-50"
+                        onMouseLeave={() => setMoreOpen(false)}
+                      >
+                        <div className="max-h-[70vh] overflow-y-auto p-2">
+                          {moreCategories.map((cat) => (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 rounded-lg text-sm font-body hover:bg-muted transition-colors"
+                              onClick={() => {
+                                setMoreOpen(false);
+                                toggleCategory({ id: cat.id, category_name: cat.category_name });
+                              }}
+                            >
+                              {cat.category_name}
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
               <Link to="/products" className="px-4 py-2 text-sm font-semibold font-body tracking-wide uppercase text-fashion-coral hover:opacity-80 transition-opacity">
                 Sale
               </Link>
@@ -269,41 +312,51 @@ const Header = () => {
 
         {/* Mega Menu */}
         <AnimatePresence>
-          {activeMenu && (
+          {activeCategory && (
             <motion.div
               initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -5 }}
               transition={{ duration: 0.2 }}
               className="absolute left-0 right-0 bg-background border-t border-border shadow-lg z-50"
-              onMouseEnter={() => setActiveMenu(activeMenu)}
-              onMouseLeave={() => setActiveMenu(null)}
+              onMouseEnter={() => setActiveCategory(activeCategory)}
+              onMouseLeave={() => setActiveCategory(null)}
             >
               <div className="container mx-auto py-8 px-8">
-                <div className="grid grid-cols-4 gap-8">
-                  {Object.entries(megaMenuData[activeMenu]).map(([subcat, items]) => (
-                    <div key={subcat}>
-                      <h3 className="text-sm font-bold text-primary uppercase mb-3 font-body">{subcat}</h3>
-                      <ul className="space-y-2">
-                        {items.map(item => (
-                          <li key={item}>
-                            <Link
-                              to={buildProductsLink({
-                                gender: ['Men', 'Women', 'Kids'].includes(activeMenu) ? activeMenu : undefined,
-                                category: activeMenu === 'Beauty' ? 'Beauty' : subcat,
-                                sub: item,
-                              })}
-                              className="text-sm text-muted-foreground hover:text-primary transition-colors font-body"
-                              onClick={() => setActiveMenu(null)}
-                            >
-                              {item}
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between gap-4 mb-6">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-foreground font-body truncate">{activeCategory.category_name}</h3>
+                    <p className="text-xs text-muted-foreground font-body">Browse subcategories</p>
+                  </div>
+                  <Link
+                    to={buildProductsLink({ category: activeCategory.category_name })}
+                    className="text-sm font-semibold text-primary hover:opacity-80 transition-opacity font-body"
+                    onClick={() => setActiveCategory(null)}
+                  >
+                    View all
+                  </Link>
                 </div>
+
+                {subcategoriesQuery.isLoading ? (
+                  <div className="text-sm text-muted-foreground font-body">Loading...</div>
+                ) : subcategoriesQuery.isError ? (
+                  <div className="text-sm text-destructive font-body">Failed to load subcategories</div>
+                ) : (subcategoriesQuery.data?.length ?? 0) === 0 ? (
+                  <div className="text-sm text-muted-foreground font-body">No subcategories found</div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-10 gap-y-3">
+                    {(subcategoriesQuery.data || []).map((sub) => (
+                      <Link
+                        key={sub.id}
+                        to={buildProductsLink({ category: activeCategory.category_name, sub: sub.sub_category_name })}
+                        className="text-sm text-muted-foreground hover:text-primary transition-colors font-body"
+                        onClick={() => setActiveCategory(null)}
+                      >
+                        {sub.sub_category_name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -383,30 +436,146 @@ const Header = () => {
                   </div>
                 )}
               </div>
-              {(Object.keys(megaMenuData) as MenuKey[]).map(key => (
-                <div key={key} className="mb-4">
-                  <p className="text-sm font-bold uppercase text-primary mb-2 font-body">{key}</p>
-                  {Object.entries(megaMenuData[key]).map(([subcat, items]) => (
-                    <div key={subcat} className="ml-2 mb-2">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">{subcat}</p>
-                      {items.map(item => (
-                        <Link
-                          key={item}
-                          to={buildProductsLink({
-                            gender: ['Men', 'Women', 'Kids'].includes(key) ? key : undefined,
-                            category: key === 'Beauty' ? 'Beauty' : subcat,
-                            sub: item,
-                          })}
-                          className="block py-1 text-sm text-foreground hover:text-primary font-body"
-                          onClick={() => setMobileOpen(false)}
+              <div className="mb-2">
+                <p className="text-sm font-bold uppercase text-primary mb-3 font-body">Categories</p>
+
+                {categoriesQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground font-body">Loading...</p>
+                ) : categoriesQuery.isError ? (
+                  <p className="text-sm text-destructive font-body">Failed to load categories</p>
+                ) : (
+                  <>
+                    {topCategories.map((cat) => (
+                      <div key={cat.id} className="mb-2">
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between py-2 text-sm font-semibold font-body"
+                          onClick={() => setMobileActiveCategoryId((prev) => (prev === cat.id ? null : cat.id))}
                         >
-                          {item}
-                        </Link>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              ))}
+                          <span className="truncate">{cat.category_name}</span>
+                          <ChevronDown size={16} className={`transition-transform ${mobileActiveCategoryId === cat.id ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        <AnimatePresence>
+                          {mobileActiveCategoryId === cat.id && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="overflow-hidden pl-3 pb-2"
+                            >
+                              {mobileSubcategoriesQuery.isLoading ? (
+                                <p className="text-sm text-muted-foreground font-body py-1">Loading...</p>
+                              ) : mobileSubcategoriesQuery.isError ? (
+                                <p className="text-sm text-destructive font-body py-1">Failed to load</p>
+                              ) : (mobileSubcategoriesQuery.data?.length ?? 0) === 0 ? (
+                                <p className="text-sm text-muted-foreground font-body py-1">No subcategories</p>
+                              ) : (
+                                (mobileSubcategoriesQuery.data || []).map((sub) => (
+                                  <Link
+                                    key={sub.id}
+                                    to={buildProductsLink({ category: cat.category_name, sub: sub.sub_category_name })}
+                                    className="block py-1 text-sm text-foreground hover:text-primary font-body"
+                                    onClick={() => setMobileOpen(false)}
+                                  >
+                                    {sub.sub_category_name}
+                                  </Link>
+                                ))
+                              )}
+
+                              <Link
+                                to={buildProductsLink({ category: cat.category_name })}
+                                className="block py-1 text-sm font-semibold text-primary font-body"
+                                onClick={() => setMobileOpen(false)}
+                              >
+                                View all
+                              </Link>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    ))}
+
+                    {moreCategories.length > 0 && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between py-2 text-sm font-semibold font-body"
+                          onClick={() => setMobileMoreOpen(v => !v)}
+                        >
+                          <span>More</span>
+                          <ChevronDown size={16} className={`transition-transform ${mobileMoreOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        <AnimatePresence>
+                          {mobileMoreOpen && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="overflow-hidden pl-2"
+                            >
+                              {moreCategories.map((cat) => (
+                                <div key={cat.id} className="mb-2">
+                                  <button
+                                    type="button"
+                                    className="w-full flex items-center justify-between py-2 text-sm font-semibold font-body"
+                                    onClick={() => setMobileActiveCategoryId((prev) => (prev === cat.id ? null : cat.id))}
+                                  >
+                                    <span className="truncate">{cat.category_name}</span>
+                                    <ChevronDown size={16} className={`transition-transform ${mobileActiveCategoryId === cat.id ? 'rotate-180' : ''}`} />
+                                  </button>
+
+                                  <AnimatePresence>
+                                    {mobileActiveCategoryId === cat.id && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="overflow-hidden pl-3 pb-2"
+                                      >
+                                        {mobileSubcategoriesQuery.isLoading ? (
+                                          <p className="text-sm text-muted-foreground font-body py-1">Loading...</p>
+                                        ) : mobileSubcategoriesQuery.isError ? (
+                                          <p className="text-sm text-destructive font-body py-1">Failed to load</p>
+                                        ) : (mobileSubcategoriesQuery.data?.length ?? 0) === 0 ? (
+                                          <p className="text-sm text-muted-foreground font-body py-1">No subcategories</p>
+                                        ) : (
+                                          (mobileSubcategoriesQuery.data || []).map((sub) => (
+                                            <Link
+                                              key={sub.id}
+                                              to={buildProductsLink({ category: cat.category_name, sub: sub.sub_category_name })}
+                                              className="block py-1 text-sm text-foreground hover:text-primary font-body"
+                                              onClick={() => setMobileOpen(false)}
+                                            >
+                                              {sub.sub_category_name}
+                                            </Link>
+                                          ))
+                                        )}
+
+                                        <Link
+                                          to={buildProductsLink({ category: cat.category_name })}
+                                          className="block py-1 text-sm font-semibold text-primary font-body"
+                                          onClick={() => setMobileOpen(false)}
+                                        >
+                                          View all
+                                        </Link>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
