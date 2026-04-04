@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, ArrowRight, Sparkles, Truck, RotateCcw, Shield, Tag, Star, TrendingUp } from 'lucide-react';
@@ -31,6 +31,17 @@ const Homepage = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const productsQuery = usePlatformProducts({ k: '', limit: 80, offset: 0 });
   const categoriesQuery = usePlatformCategories();
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (categoryScrollRef.current) {
+      const scrollAmount = 400;
+      categoryScrollRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const products = useMemo(() => productsQuery.data?.ui ?? [], [productsQuery.data]);
 
@@ -113,30 +124,63 @@ const Homepage = () => {
 
       {/* Categories */}
       <section className="container mx-auto py-12 px-4">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-display font-bold text-foreground">Shop by Category</h2>
-          <p className="text-muted-foreground mt-2 font-body">Find your perfect style</p>
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-display font-bold text-foreground tracking-tight">Shop by Category</h2>
+          <div className="w-12 h-1 fashion-gradient mx-auto mt-3 rounded-full" />
+          <p className="text-muted-foreground mt-4 font-body text-sm">Find your perfect style from our curated collections</p>
         </div>
-        <div className="overflow-x-scroll overflow-y-hidden pb-3">
-          <div className="flex gap-5 min-w-max px-1">
-            {categoryCards.map((cat, i) => (
-              <motion.div
-                key={cat.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.03 }}
-                className="shrink-0 w-24"
-              >
-                <Link to={`/products?category=${encodeURIComponent(cat.name)}`} className="group block text-center">
-                  <div className="relative overflow-hidden rounded-full aspect-square w-20 h-20 mx-auto mb-2 border-2 border-transparent group-hover:border-primary transition-colors">
-                    <img src={cat.image} alt={cat.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  </div>
-                  <p className="text-xs font-semibold text-foreground font-body line-clamp-1">{cat.name}</p>
-                  <p className="text-[10px] text-muted-foreground font-body">{cat.count} items</p>
-                </Link>
-              </motion.div>
-            ))}
+
+        <div className="relative group/category-nav">
+          {/* Nav Buttons */}
+          <button
+            onClick={() => scroll('left')}
+            className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-background/80 backdrop-blur-md p-3 rounded-full shadow-lg border border-border opacity-0 group-hover/category-nav:opacity-100 transition-all hover:bg-background hover:scale-110 active:scale-95 disabled:opacity-30 flex items-center justify-center text-foreground"
+            aria-label="Scroll Left"
+          >
+            <ChevronLeft size={20} strokeWidth={2.5} />
+          </button>
+
+          <button
+            onClick={() => scroll('right')}
+            className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-background/80 backdrop-blur-md p-3 rounded-full shadow-lg border border-border opacity-0 group-hover/category-nav:opacity-100 transition-all hover:bg-background hover:scale-110 active:scale-95 disabled:opacity-30 flex items-center justify-center text-foreground"
+            aria-label="Scroll Right"
+          >
+            <ChevronRight size={20} strokeWidth={2.5} />
+          </button>
+
+          <div
+            ref={categoryScrollRef}
+            className="overflow-x-auto no-scrollbar scroll-smooth pb-4 px-2"
+          >
+            <div className="flex gap-12 min-w-max px-14">
+              {categoryCards.map((cat, i) => (
+                <motion.div
+                  key={cat.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.03 }}
+                  className="shrink-0 w-28"
+                >
+                  <Link to={`/products?category=${encodeURIComponent(cat.name)}`} className="group block text-center">
+                    <div className="relative mb-3 flex flex-col items-center">
+                      <div className="relative overflow-hidden rounded-full aspect-square w-24 h-24 border-[3px] border-transparent group-hover:border-primary group-hover:p-1 transition-all duration-300 bg-muted/30">
+                        <img
+                          src={cat.image}
+                          alt={cat.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover rounded-full group-hover:scale-110 transition-transform duration-500"
+                        />
+                      </div>
+                      <div className="mt-3">
+                        <p className="text-sm font-bold text-foreground font-body line-clamp-1 group-hover:text-primary transition-colors">{cat.name}</p>
+                        <p className="text-[11px] text-muted-foreground font-body mt-0.5">{cat.count} items</p>
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
