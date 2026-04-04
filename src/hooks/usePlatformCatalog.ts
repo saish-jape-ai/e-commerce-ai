@@ -2,20 +2,32 @@ import { useMemo } from 'react';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { platformApi } from '@/lib/platform/client';
 import { platformProductDetailToUiProduct, platformProductToUiProduct } from '@/lib/platform/mappers';
-import type { PlatformCategory, PlatformProduct, PlatformProductDetail } from '@/lib/platform/types';
+import type { PlatformCategory, PlatformProduct, PlatformProductDetail, PlatformSubcategory } from '@/lib/platform/types';
 import type { Product } from '@/data/products';
 
 export const platformQueryKeys = {
-  categories: (input: { k: string; clientId?: string }) => ['platform', 'categories', input] as const,
+  categories: (input: { k: string; clientId?: string; limit?: number; offset?: number }) => ['platform', 'categories', input] as const,
+  subcategories: (input: { categoryId: string; clientId?: string }) => ['platform', 'subcategories', input] as const,
   products: (input: { k: string; clientId?: string; limit?: number; offset?: number }) => ['platform', 'products', input] as const,
   productDetail: (input: { productId: string; clientId?: string }) => ['platform', 'product', input] as const,
 };
 
-export const usePlatformCategories = (input?: { k?: string; clientId?: string }) => {
+export const usePlatformCategories = (input?: { k?: string; clientId?: string; limit?: number; offset?: number }) => {
   const k = input?.k ?? '';
+  const limit = input?.limit ?? 200;
+  const offset = input?.offset ?? 0;
   return useQuery({
-    queryKey: platformQueryKeys.categories({ k, clientId: input?.clientId }),
-    queryFn: ({ signal }) => platformApi.publicCategories({ clientId: input?.clientId, k, signal }).then(r => r.data),
+    queryKey: platformQueryKeys.categories({ k, clientId: input?.clientId, limit, offset }),
+    queryFn: ({ signal }) => platformApi.publicCategories({ clientId: input?.clientId, k, limit, offset, signal }).then(r => r.data),
+    staleTime: 1000 * 60 * 5,
+  });
+};
+
+export const usePlatformSubcategories = (categoryId: string | null | undefined, input?: { clientId?: string }) => {
+  return useQuery({
+    queryKey: platformQueryKeys.subcategories({ categoryId: categoryId || '', clientId: input?.clientId }),
+    enabled: Boolean(categoryId),
+    queryFn: ({ signal }) => platformApi.publicSubcategories({ clientId: input?.clientId, categoryIds: categoryId!, signal }).then(r => r.data),
     staleTime: 1000 * 60 * 5,
   });
 };

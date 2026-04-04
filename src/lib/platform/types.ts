@@ -21,6 +21,17 @@ export type PlatformCategory = {
   updated_at: string;
 };
 
+export type PlatformSubcategory = {
+  id: string;
+  sub_category_name: string;
+  description: string | null;
+  category_name?: string | null;
+  client_id: string;
+  product_category_id: string;
+  sub_category_icon_url: string | null;
+  tags: unknown[];
+};
+
 export type PlatformTag = {
   id: string;
   name: string;

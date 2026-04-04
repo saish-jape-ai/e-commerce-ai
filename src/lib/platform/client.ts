@@ -5,6 +5,7 @@ import type {
   PlatformCart,
   PlatformCartItemInput,
   PlatformCategory,
+  PlatformSubcategory,
   PlatformLoginResponse,
   PlatformOrdersListResponse,
   PlatformOrderCreateRequest,
@@ -108,6 +109,22 @@ export const platformApi = {
       // Fallback for environments that only support POST.
       const payload = { k: input?.k ?? '', limit: input?.limit, offset: input?.offset };
       return tryPostThenGet<PlatformApiResponse<PlatformCategory[]>>(base, payload, { signal: input?.signal });
+    }
+  },
+
+  async publicSubcategories(input: { categoryIds: string | string[]; clientId?: string; limit?: number; offset?: number; signal?: AbortSignal }) {
+    const cfg = getPlatformConfig();
+    const clientId = input.clientId || cfg.categoriesClientId;
+    const base = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/subcategories`);
+
+    const categoryIds = Array.isArray(input.categoryIds) ? input.categoryIds : [input.categoryIds];
+    const payload = { category_ids: categoryIds.join(',') };
+
+    // Curl example uses POST (because --data is present); fallback to GET-only environments.
+    try {
+      return await postJson<PlatformApiResponse<PlatformSubcategory[]>>(base, payload, { signal: input.signal });
+    } catch (err: unknown) {
+      return tryGetThenPost<PlatformApiResponse<PlatformSubcategory[]>>(base, payload, { signal: input.signal });
     }
   },
 
