@@ -262,7 +262,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <CartContext.Provider value={{
       items, addToCart, removeFromCart, updateQuantity, clearCart,
-      totalItems, totalPrice, wishlist, toggleWishlist, isInWishlist,
+      totalItems, totalPrice, wishlist: effectiveWishlist, toggleWishlist, isInWishlist,
     }}>
       {children}
     </CartContext.Provider>

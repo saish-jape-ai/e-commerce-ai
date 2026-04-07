@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Bell, Globe, Moon, Sun, Shield, Eye, Smartphone, Mail, Lock, ChevronRight, LogOut, Trash2 } from 'lucide-react';
+import { Bell, Globe, Moon, Sun, Shield, Eye, Smartphone, Mail, Lock, ChevronRight, LogOut, Trash2, Palette, Type } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme, ThemeColor, ThemeMode, FontFamily } from '@/context/ThemeContext';
 
 interface SettingToggle {
   id: string;
@@ -29,9 +30,19 @@ const SettingsPage = () => {
     { id: 'two_factor', label: 'Two-Factor Authentication', desc: 'Add extra security with OTP verification', icon: Lock, enabled: false },
   ]);
 
-  const [darkMode, setDarkMode] = useState(false);
+  const { color, mode, font, setColor, setMode, setFont } = useTheme();
   const [language, setLanguage] = useState('en');
   const [currency, setCurrency] = useState('INR');
+
+  const themeColors: { id: ThemeColor; label: string; hex: string }[] = [
+    { id: 'rose', label: 'Rose', hex: '#fb3a5d' },
+    { id: 'blue', label: 'Blue', hex: '#2563eb' },
+    { id: 'green', label: 'Green', hex: '#16a34a' },
+    { id: 'violet', label: 'Violet', hex: '#7c3aed' },
+    { id: 'orange', label: 'Orange', hex: '#f97316' },
+  ];
+
+  const fontFamilies: FontFamily[] = ['Afacad Flux', 'Inter', 'Roboto', 'Playfair Display'];
 
   const toggleSetting = (list: SettingToggle[], setList: React.Dispatch<React.SetStateAction<SettingToggle[]>>, id: string) => {
     setList(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
@@ -52,21 +63,58 @@ const SettingsPage = () => {
       </motion.div>
 
       <div className="max-w-2xl mx-auto space-y-8">
-        {/* Appearance */}
+        {/* Appearance & Theme */}
         <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
           <h2 className="text-lg font-display font-bold text-foreground mb-4 flex items-center gap-2">
-            <Sun size={20} /> Appearance
+            <Palette size={20} /> Appearance & Theme
           </h2>
           <div className="bg-card border border-border rounded-2xl divide-y divide-border">
             <div className="flex items-center justify-between p-5">
               <div className="flex items-center gap-3">
-                {darkMode ? <Moon size={18} className="text-primary" /> : <Sun size={18} className="text-primary" />}
+                {mode === 'dark' ? <Moon size={18} className="text-primary" /> : <Sun size={18} className="text-primary" />}
                 <div>
                   <p className="text-sm font-semibold text-foreground font-body">Dark Mode</p>
                   <p className="text-xs text-muted-foreground font-body">Switch to dark theme for comfortable viewing</p>
                 </div>
               </div>
-              <ToggleSwitch enabled={darkMode} onToggle={() => { setDarkMode(!darkMode); toast.info('Dark mode coming soon!'); }} />
+              <ToggleSwitch enabled={mode === 'dark'} onToggle={() => { setMode(mode === 'dark' ? 'light' : 'dark'); }} />
+            </div>
+            
+            <div className="flex items-start justify-between p-5 flex-col md:flex-row md:items-center gap-4">
+              <div className="flex items-center gap-3">
+                <Palette size={18} className="text-primary" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground font-body">Theme Color</p>
+                  <p className="text-xs text-muted-foreground font-body">Select your primary brand color</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {themeColors.map(tc => (
+                  <button
+                    key={tc.id}
+                    onClick={() => setColor(tc.id)}
+                    className={`w-8 h-8 rounded-full transition-transform ${color === tc.id ? 'scale-110 ring-2 ring-offset-2 ring-primary ring-offset-background' : 'hover:scale-105'}`}
+                    style={{ backgroundColor: tc.hex }}
+                    aria-label={tc.label}
+                    title={tc.label}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-5">
+              <div className="flex items-center gap-3">
+                <Type size={18} className="text-primary" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground font-body">Font Family</p>
+                  <p className="text-xs text-muted-foreground font-body">Choose site-wide typography</p>
+                </div>
+              </div>
+              <select value={font} onChange={e => setFont(e.target.value as FontFamily)} className="text-sm border border-border rounded-lg px-3 py-1.5 bg-background font-body outline-none max-w-[150px]">
+                {fontFamilies.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center justify-between p-5">
               <div className="flex items-center gap-3">

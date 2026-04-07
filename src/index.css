@@ -90,11 +90,11 @@
   }
 
   .fashion-gradient {
-    background: linear-gradient(135deg, hsl(346, 100%, 62%), hsl(346, 80%, 72%));
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8));
   }
 
   .fashion-gold-gradient {
-    background: linear-gradient(135deg, hsl(43, 96%, 56%), hsl(38, 90%, 65%));
+    background: linear-gradient(135deg, hsl(var(--fashion-gold)), hsl(var(--fashion-gold) / 0.8));
   }
 
   .hover-lift {

@@ -210,7 +210,7 @@ const Homepage = () => {
             <Link to="/coupons" className="bg-background/20 text-primary-foreground px-5 py-2 rounded-full font-semibold text-sm font-body hover:bg-background/30 transition-colors border border-primary-foreground/30">
               View Coupons
             </Link>
-            <Link to="/products" className="bg-background text-foreground px-6 py-2 rounded-full font-semibold text-sm hover:bg-background/90 transition-colors font-body">
+            <Link to="/products" className="bg-background text-primary px-6 py-2 rounded-full font-semibold text-sm hover:bg-background/90 transition-colors font-body">
               Shop the Sale →
             </Link>
           </div>
@@ -363,10 +363,10 @@ const Homepage = () => {
             <h2 className="text-2xl font-display font-bold text-foreground mb-2">Download the Stylora App</h2>
             <p className="text-muted-foreground font-body mb-4">Get exclusive app-only deals, faster checkout, and real-time order tracking.</p>
             <div className="flex gap-3">
-              <button className="bg-foreground text-background px-5 py-2.5 rounded-lg font-semibold text-sm font-body flex items-center gap-2">
+              <button className="bg-primary text-primary-foreground px-5 py-2.5 rounded-lg font-semibold text-sm font-body flex items-center gap-2 hover:bg-primary/90 transition-colors">
                 <span className="text-lg">🍎</span> App Store
               </button>
-              <button className="bg-foreground text-background px-5 py-2.5 rounded-lg font-semibold text-sm font-body flex items-center gap-2">
+              <button className="bg-primary text-primary-foreground px-5 py-2.5 rounded-lg font-semibold text-sm font-body flex items-center gap-2 hover:bg-primary/90 transition-colors">
                 <span className="text-lg">▶️</span> Google Play
               </button>
             </div>

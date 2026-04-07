@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['Afacad Flux', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        body: ['Afacad Flux', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)'],
+        body: ['var(--font-body)'],
       },
       colors: {
         border: "hsl(var(--border))",

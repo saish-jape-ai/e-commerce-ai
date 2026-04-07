@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import AppRoutes from "@/AppRoutes";
 
 const queryClient = new QueryClient();
@@ -12,7 +13,8 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
         <CartProvider>
           <Toaster />
           <Sonner />
@@ -20,7 +22,8 @@ const App = () => (
             <AppRoutes />
           </BrowserRouter>
         </CartProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
