@@ -109,7 +109,6 @@ const ProfilePage = () => {
                     { label: 'Full Name', value: user?.name || '-', icon: User },
                     { label: 'Email', value: user?.email || '-', icon: Mail },
                     { label: 'Phone', value: user?.phone || '-', icon: Phone },
-                    { label: 'Gender', value: 'Male', icon: User },
                     { label: 'Date of Birth', value: '15 Aug 1995', icon: User },
                     { label: 'Location', value: 'Gurugram, Haryana', icon: MapPin },
                   ].map(field => (

@@ -55,6 +55,61 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (Array.isArray(storedWishlist)) setWishlist(storedWishlist);
   }, []);
 
+  const cartQuery = useQuery({
+    queryKey: ['platform', 'cart', { userId: user?.id }],
+    enabled: Boolean(accessToken && user?.id),
+    queryFn: ({ signal }) => platformApi.cartList({ accessToken: accessToken!, signal }),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    
+    if (cartQuery.data?.success && Array.isArray(cartQuery.data.data)) {
+       const serverCarts = cartQuery.data.data;
+       if (serverCarts.length > 0) {
+         const serverItems = serverCarts[0].items || [];
+         const mapped: CartItem[] = serverItems.map((ci: any) => {
+            const variantOptions = ci.variants?.[0]?.options || {};
+            const mrp = ci.mrp || ci.price || 0;
+            const price = ci.price || 0;
+            const d = mrp > 0 ? Math.round(((mrp - price) / mrp) * 100) : 0;
+            
+            return {
+              product: {
+                id: ci.product_id,
+                platformProductId: ci.product_id,
+                platformVariantId: ci.variants?.[0]?.product_variant_id ?? null,
+                name: ci.product_name,
+                price: price,
+                originalPrice: mrp,
+                image: ci.media?.[0]?.media_url || 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=300&h=300&fit=crop',
+                brand: 'Stylora',
+                category: '',
+                subcategory: '',
+                description: '',
+                features: [],
+                tags: [],
+                rating: 0,
+                reviewsCount: 0,
+                isNew: false,
+                isTrending: false,
+                gender: '',
+                discount: d,
+              },
+              quantity: ci.quantity || 1,
+              size: variantOptions.size || 'M',
+              color: variantOptions.color || 'Black',
+              platformCartItemId: ci.cart_item_ids?.[0], 
+            };
+         });
+         setItems(mapped);
+       } else {
+         setItems([]);
+       }
+    }
+  }, [cartQuery.data, isAuthed]);
+
   useEffect(() => {
     if (!isAuthed) {
       setItems([]);
@@ -62,9 +117,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const storedItems = storageGetJson<CartItem[]>("stylora_cart_v1");
-    if (Array.isArray(storedItems)) setItems(storedItems);
-  }, [isAuthed]);
+    // Optional: Could fall back to local storage before API fetch finishes
+    if (!cartQuery.data) {
+      const storedItems = storageGetJson<CartItem[]>("stylora_cart_v1");
+      if (Array.isArray(storedItems)) setItems(storedItems);
+    }
+  }, [isAuthed, cartQuery.data]);
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -119,6 +177,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
               )
             );
           }
+          queryClient.invalidateQueries({ queryKey: ['platform', 'cart'] });
         })
         .catch(err => {
           toast.error(err instanceof Error ? err.message : 'Failed to sync cart');
@@ -126,20 +185,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       toast.error('Missing platform product id');
     }
-  }, [accessToken, isAuthed, user?.id]);
+  }, [accessToken, isAuthed, user?.id, queryClient]);
 
   const removeFromCart = useCallback((productId: string) => {
     if (!isAuthed) return;
     setItems(prev => {
       const toDelete = prev.filter(i => i.product.id === productId).map(i => i.platformCartItemId).filter(Boolean) as string[];
       if (accessToken && toDelete.length) {
-        platformApi.cartDeleteItems({ accessToken, cartItemIds: toDelete }).catch(() => {
-          // Keep UI responsive; server failures can be retried later.
+        platformApi.cartDeleteItems({ accessToken, cartItemIds: toDelete })
+          .then(() => queryClient.invalidateQueries({ queryKey: ['platform', 'cart'] }))
+          .catch(() => {
+          // Keep UI responsive
         });
       }
       return prev.filter(i => i.product.id !== productId);
     });
-  }, [accessToken, isAuthed]);
+  }, [accessToken, isAuthed, queryClient]);
 
   const updateQuantity = useCallback((productId: string, quantity: number) => {
     if (!isAuthed) return;
@@ -153,13 +214,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cartItemIds = affected.map(i => i.platformCartItemId).filter(Boolean) as string[];
       const cartItemId = cartItemIds[0];
       if (accessToken && cartItemId) {
-        platformApi.cartUpdateItemQuantity({ accessToken, cartItemId, quantity, cartItemIds }).catch(() => {
+        platformApi.cartUpdateItemQuantity({ accessToken, cartItemId, quantity, cartItemIds })
+          .then(() => queryClient.invalidateQueries({ queryKey: ['platform', 'cart'] }))
+          .catch(() => {
           // Keep UI responsive; server failures can be retried later.
         });
       }
       return next;
     });
-  }, [accessToken, isAuthed]);
+  }, [accessToken, isAuthed, queryClient]);
 
   const clearCart = useCallback(() => setItems([]), []);
 

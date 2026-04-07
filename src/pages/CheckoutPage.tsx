@@ -142,10 +142,14 @@ const CheckoutPage = () => {
         zip_code: selectedAddress.zip_code || selectedAddress.zipcode || '',
       };
 
-      const billNumber = `INV${Date.now()}`;
-      const trackingNumber = `TRK${Date.now()}`;
+      const generate11Alphanumeric = () => {
+        return (Date.now().toString(36) + Math.random().toString(36).substring(2)).toUpperCase().substring(0, 11);
+      };
+      
+      const billNumber = `INV${generate11Alphanumeric()}`;
+      const trackingNumber = `TRK${generate11Alphanumeric()}`;
 
-      return platformApi.orderCreate({
+      const orderRes = await platformApi.orderCreate({
         accessToken,
         body: {
           currency: 'INR',
@@ -178,6 +182,48 @@ const CheckoutPage = () => {
           payment_id: '',
         },
       });
+
+      const resData = orderRes.data as any;
+      const orderId = resData?.id || resData?.order_id || resData?.reference_id || (Array.isArray(resData) ? resData[0]?.order_id || resData[0]?.id : undefined);
+
+      if (selectedPayment !== 'cod' && orderId) {
+        const credsRes = await platformApi.paymentCredentialsList({ accessToken });
+        const dataArr = credsRes.data?.data || credsRes.data || [];
+        const creds = Array.isArray(dataArr) ? dataArr : [];
+        const easebuzzCred = creds.find((c: any) => c.gateway === 'easebuzz') || creds[0];
+
+        if (easebuzzCred) {
+          const retUrl = new URL(window.location.origin + `/order-success?payment_success=true&order_id=${orderId}`);
+          
+          const genRes = await platformApi.paymentGenerateLink({
+            accessToken,
+            gateway: 'easebuzz',
+            body: {
+              amount: finalTotal, // assuming finalTotal is correct amount or backend checks
+              client_id: cfg.ordersClientId,
+              user_id: user.id,
+              payment_credential_id: easebuzzCred.id,
+              provider_id: easebuzzCred.payment_provider_id || easebuzzCred.provider_id,
+              gateway: 'easebuzz',
+              reference_id: orderId,
+              return_url: retUrl.toString(),
+              payment_mode: selectedPayment,
+              requested_by: user.id,
+              date: new Date().toISOString(),
+              type: 'order',
+              payment_id: ''
+            }
+          });
+          
+          const paymentData = genRes.data as any;
+          const urlStr = paymentData?.url || paymentData?.link || paymentData?.payment_url || (typeof paymentData === 'string' && paymentData.startsWith('http') ? paymentData : null);
+          if (urlStr) {
+            return { redirectUrl: urlStr };
+          }
+        }
+      }
+
+      return { redirectUrl: '/order-success' };
     },
   });
 
@@ -467,10 +513,14 @@ const CheckoutPage = () => {
                     onClick={async () => {
                       setIsProcessing(true);
                       try {
-                        await orderMutation.mutateAsync();
+                        const res = await orderMutation.mutateAsync();
                         clearCart();
                         toast.success('Order placed successfully');
-                        navigate('/order-success');
+                        if (res.redirectUrl && res.redirectUrl.startsWith('http')) {
+                          window.location.href = res.redirectUrl;
+                        } else {
+                          navigate(res.redirectUrl || '/order-success');
+                        }
                       } catch (err) {
                         toast.error(err instanceof Error ? err.message : 'Failed to place order');
                       } finally {

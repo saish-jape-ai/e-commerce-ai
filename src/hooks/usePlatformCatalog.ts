@@ -8,7 +8,7 @@ import type { Product } from '@/data/products';
 export const platformQueryKeys = {
   categories: (input: { k: string; clientId?: string; limit?: number; offset?: number }) => ['platform', 'categories', input] as const,
   subcategories: (input: { categoryId: string; clientId?: string }) => ['platform', 'subcategories', input] as const,
-  products: (input: { k: string; clientId?: string; limit?: number; offset?: number }) => ['platform', 'products', input] as const,
+  products: (input: { k: string; clientId?: string; limit?: number; offset?: number; categoryId?: string; subcategoryId?: string }) => ['platform', 'products', input] as const,
   productDetail: (input: { productId: string; clientId?: string }) => ['platform', 'product', input] as const,
 };
 
@@ -46,15 +46,19 @@ export const usePlatformProducts = (input?: {
   clientId?: string;
   limit?: number;
   offset?: number;
+  categoryId?: string;
+  subcategoryId?: string;
 }): UseQueryResult<PlatformProductsResult> => {
   const k = input?.k ?? '';
   const limit = input?.limit;
   const offset = input?.offset;
+  const categoryId = input?.categoryId;
+  const subcategoryId = input?.subcategoryId;
 
   return useQuery({
-    queryKey: platformQueryKeys.products({ k, clientId: input?.clientId, limit, offset }),
+    queryKey: platformQueryKeys.products({ k, clientId: input?.clientId, limit, offset, categoryId, subcategoryId }),
     queryFn: async ({ signal }) => {
-      const res = await platformApi.publicProducts({ clientId: input?.clientId, k, limit, offset, signal });
+      const res = await platformApi.publicProducts({ clientId: input?.clientId, k, limit, offset, categoryId, subcategoryId, signal });
       const raw = res.data ?? [];
       return {
         raw,

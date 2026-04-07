@@ -45,9 +45,20 @@ const Homepage = () => {
 
   const products = useMemo(() => productsQuery.data?.ui ?? [], [productsQuery.data]);
 
-  const trendingProducts = useMemo(() => products.filter(p => p.isTrending).slice(0, 10), [products]);
-  const newArrivals = useMemo(() => products.filter(p => p.isNew).slice(0, 12), [products]);
-  const bestSellers = useMemo(() => products.filter(p => p.tags.includes('bestseller')).slice(0, 8), [products]);
+  const trendingProducts = useMemo(() => {
+    const arr = products.filter(p => p.isTrending);
+    return (arr.length > 0 ? arr : products).slice(0, 10);
+  }, [products]);
+
+  const newArrivals = useMemo(() => {
+    const arr = products.filter(p => p.isNew);
+    return (arr.length > 0 ? arr : [...products].reverse()).slice(0, 12);
+  }, [products]);
+
+  const bestSellers = useMemo(() => {
+    const arr = products.filter(p => p.tags.some(t => t.toLowerCase() === 'bestseller' || t.toLowerCase() === 'best seller'));
+    return (arr.length > 0 ? arr : [...products].reverse()).slice(0, 8);
+  }, [products]);
   const ethnicWear = useMemo(() => products.filter(p => p.category.toLowerCase() === 'ethnic').slice(0, 4), [products]);
   const beautyProducts = useMemo(() => products.filter(p => p.category.toLowerCase() === 'beauty').slice(0, 4), [products]);
 

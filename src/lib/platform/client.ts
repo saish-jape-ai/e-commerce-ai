@@ -99,40 +99,39 @@ export const platformApi = {
   async publicCategories(input?: { clientId?: string; k?: string; limit?: number; offset?: number; signal?: AbortSignal }) {
     const cfg = getPlatformConfig();
     const clientId = input?.clientId || cfg.categoriesClientId;
-    const base = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/categories`);
-    const url = withQuery(base, { k: input?.k ?? '', limit: input?.limit, offset: input?.offset });
-
-    // Prefer GET (your curl shows POST returns: "Route POST ... not found")
-    try {
-      return await platformFetchJson<PlatformApiResponse<PlatformCategory[]>>(url, { method: 'GET', signal: input?.signal });
-    } catch (err: unknown) {
-      // Fallback for environments that only support POST.
-      const payload = { k: input?.k ?? '', limit: input?.limit, offset: input?.offset };
-      return tryPostThenGet<PlatformApiResponse<PlatformCategory[]>>(base, payload, { signal: input?.signal });
-    }
+    const url = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/categories`);
+    
+    // The user's curl is a GET request with a JSON body: {"k":""}
+    // `tryGetThenPost` will try GET first (without body because JS fetch forbids it)
+    // and if it fails (404/405/etc), it will POST with the body.
+    return tryGetThenPost<PlatformApiResponse<PlatformCategory[]>>(url, { k: input?.k ?? '' }, { 
+      signal: input?.signal,
+      headers: { 'Content-Type': 'application/json' },
+    });
   },
 
   async publicSubcategories(input: { categoryIds: string | string[]; clientId?: string; limit?: number; offset?: number; signal?: AbortSignal }) {
     const cfg = getPlatformConfig();
     const clientId = input.clientId || cfg.categoriesClientId;
-    const base = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/subcategories`);
+    const url = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/subcategories`);
 
     const categoryIds = Array.isArray(input.categoryIds) ? input.categoryIds : [input.categoryIds];
     const payload = { category_ids: categoryIds.join(',') };
 
-    // Curl example uses POST (because --data is present); fallback to GET-only environments.
-    try {
-      return await postJson<PlatformApiResponse<PlatformSubcategory[]>>(base, payload, { signal: input.signal });
-    } catch (err: unknown) {
-      return tryGetThenPost<PlatformApiResponse<PlatformSubcategory[]>>(base, payload, { signal: input.signal });
-    }
+    return postJson<PlatformApiResponse<PlatformSubcategory[]>>(url, payload, { signal: input.signal });
   },
 
-  async publicProducts(input?: { clientId?: string; k?: string; limit?: number; offset?: number; signal?: AbortSignal }) {
+  async publicProducts(input?: { clientId?: string; k?: string; limit?: number; offset?: number; signal?: AbortSignal; categoryId?: string; subcategoryId?: string }) {
     const cfg = getPlatformConfig();
     const clientId = input?.clientId || cfg.productsClientId;
     const url = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/get-products`);
-    const payload = { k: input?.k ?? '', limit: input?.limit, offset: input?.offset };
+    const payload: Record<string, unknown> = { k: input?.k ?? '', limit: input?.limit, offset: input?.offset };
+    if (input?.categoryId) {
+      payload.product_category_id = input.categoryId;
+    }
+    if (input?.subcategoryId) {
+      payload.sub_category_ids = input.subcategoryId;
+    }
     return postJson<PlatformApiResponse<PlatformProduct[]>>(url, payload, { signal: input?.signal });
   },
 
@@ -175,6 +174,17 @@ export const platformApi = {
     return putJson<PlatformApiResponse<unknown>>(
       url,
       { cart_item_ids: input.cartItemIds },
+      { signal: input.signal, headers: authHeaders(input.accessToken) }
+    );
+  },
+
+  async cartList(input: { accessToken: string; clientId?: string; page?: number; limit?: number; signal?: AbortSignal }) {
+    const cfg = getPlatformConfig();
+    const clientId = input.clientId || cfg.cartClientId;
+    const url = joinUrl(cfg.baseUrl, `/auth/api/cart/client/${clientId}/items`);
+    return postJson<PlatformApiResponse<any>>(
+      url,
+      { page: input.page ?? 1, limit: input.limit ?? 250 },
       { signal: input.signal, headers: authHeaders(input.accessToken) }
     );
   },
@@ -260,5 +270,20 @@ export const platformApi = {
     const clientId = input.clientId || cfg.ordersClientId;
     const url = joinUrl(cfg.baseUrl, `/auth/api/order/client/${clientId}/order`);
     return postJson<PlatformOrderCreateResponse>(url, input.body, { signal: input.signal, headers: authHeaders(input.accessToken) });
+  },
+
+  async paymentCredentialsList(input: { accessToken: string; clientId?: string; page?: number; limit?: number; signal?: AbortSignal }) {
+    const cfg = getPlatformConfig();
+    const clientId = input.clientId || cfg.ordersClientId;
+    const base = joinUrl(cfg.baseUrl, `/auth/api/client-payment-credentials/client/${clientId}`);
+    const url = withQuery(base, { page: input.page ?? 1, limit: input.limit ?? 10 });
+    return platformFetchJson<PlatformApiResponse<any>>(url, { method: 'GET', signal: input.signal, headers: authHeaders(input.accessToken) });
+  },
+
+  async paymentGenerateLink(input: { accessToken: string; clientId?: string; body: any; gateway: string; signal?: AbortSignal }) {
+    const cfg = getPlatformConfig();
+    const clientId = input.clientId || cfg.ordersClientId;
+    const url = joinUrl(cfg.baseUrl, `/auth/api/payment-gateway/client/${clientId}/generate/link/${input.gateway}`);
+    return postJson<PlatformApiResponse<any>>(url, input.body, { signal: input.signal, headers: authHeaders(input.accessToken) });
   },
 };

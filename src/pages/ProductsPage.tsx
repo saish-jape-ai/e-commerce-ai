@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { usePlatformCategories, usePlatformCategoryOptions, usePlatformProducts } from '@/hooks/usePlatformCatalog';
+import { usePlatformCategories, usePlatformCategoryOptions, usePlatformProducts, usePlatformSubcategories } from '@/hooks/usePlatformCatalog';
 import { motion, AnimatePresence } from 'framer-motion';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import { getRecentlyViewedIds } from '@/lib/recentlyViewed';
@@ -34,7 +34,20 @@ const ProductsPage = () => {
   const debouncedQuery = useDebouncedValue(query, 350);
   const categoriesQuery = usePlatformCategories();
   const categoryOptionsFromApi = usePlatformCategoryOptions(categoriesQuery.data);
-  const productsQuery = usePlatformProducts({ k: debouncedQuery, limit: 50, offset: 0 });
+  
+  const categoryParam = (new URLSearchParams(searchString).get('category') || '').trim();
+  const categoryId = categoryParam && categoryParam !== 'All' 
+    ? categoriesQuery.data?.find(c => c.category_name.toLowerCase() === categoryParam.toLowerCase())?.id 
+    : undefined;
+
+  const subcategoriesQuery = usePlatformSubcategories(categoryId);
+  
+  const subcategoryParam = (new URLSearchParams(searchString).get('sub') || '').trim();
+  const subcategoryId = subcategoryParam && subcategoryParam !== 'All'
+    ? subcategoriesQuery.data?.find(s => s.sub_category_name.toLowerCase() === subcategoryParam.toLowerCase())?.id
+    : undefined;
+
+  const productsQuery = usePlatformProducts({ k: debouncedQuery, limit: 50, offset: 0, categoryId, subcategoryId });
   const products = useMemo(() => productsQuery.data?.ui ?? [], [productsQuery.data]);
 
   const subcategoryMap = useMemo(() => {
@@ -264,9 +277,6 @@ const ProductsPage = () => {
               Clear all
             </button>
           )}
-          {selectedGender !== 'All' && (
-            <span className="px-3 py-1 rounded-full bg-muted text-sm font-body">{selectedGender}</span>
-          )}
           {selectedCategory !== 'All' && (
             <span className="px-3 py-1 rounded-full bg-muted text-sm font-body">{selectedCategory}</span>
           )}
@@ -394,23 +404,6 @@ const FilterPanel = ({
     <div className="flex items-center justify-between">
       <h3 className="text-sm font-bold uppercase tracking-wider text-foreground font-body">Filters</h3>
       <button onClick={onClearAll} className="text-sm font-semibold text-primary font-body">Reset</button>
-    </div>
-    <div>
-      <h4 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 font-body">Gender</h4>
-      <div className="space-y-2">
-        {genderFilters.map(g => (
-          <label key={g} className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="gender"
-              checked={selectedGender === g}
-              onChange={() => setSelectedGender(g)}
-              className="accent-primary"
-            />
-            <span className="text-sm text-foreground font-body">{g}</span>
-          </label>
-        ))}
-      </div>
     </div>
     <div className="border-t border-border pt-4">
       <h4 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 font-body">Category</h4>
