@@ -33,7 +33,7 @@ const CartPage = () => {
   }, [appliedCoupon, totalPrice]);
 
   const discount = couponResult?.discountAmount || 0;
-  const deliveryFee = couponResult?.freeShipping ? 0 : (totalPrice > 999 ? 0 : 99);
+  const deliveryFee = couponResult?.freeShipping ? 0 : (totalPrice > 999 ? 0 : 0);
   const finalTotal = Math.max(0, totalPrice - discount + deliveryFee);
 
   if (!isAuthenticated) {

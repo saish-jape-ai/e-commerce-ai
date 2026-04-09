@@ -10,6 +10,11 @@ import type {
   PlatformOrdersListResponse,
   PlatformOrderCreateRequest,
   PlatformOrderCreateResponse,
+  PlatformOrderUpdateRequest,
+  PlatformOrderUpdateResponse,
+  PlatformPaymentCredentialsListResponse,
+  PlatformPaymentGenerateLinkRequest,
+  PlatformPaymentGenerateLinkResponse,
   PlatformProduct,
   PlatformProductDetailResponse,
   PlatformUserGetResponse,
@@ -83,6 +88,21 @@ const tryPostThenGet = async <T>(url: string, body: unknown, init?: RequestInit 
 const tryGetThenPost = async <T>(url: string, body: unknown, init?: RequestInit & { timeoutMs?: number }) => {
   try {
     return await platformFetchJson<T>(url, { method: 'GET', ...init });
+  } catch (err: unknown) {
+    const status =
+      (err && typeof err === 'object' && 'status' in err && typeof (err as { status?: unknown }).status === 'number')
+        ? (err as { status: number }).status
+        : undefined;
+    if (status === 404 || status === 405 || status === 415) {
+      return postJson<T>(url, body, init);
+    }
+    throw err;
+  }
+};
+
+const tryPutThenPost = async <T>(url: string, body: unknown, init?: RequestInit & { timeoutMs?: number }) => {
+  try {
+    return await putJson<T>(url, body, init);
   } catch (err: unknown) {
     const status =
       (err && typeof err === 'object' && 'status' in err && typeof (err as { status?: unknown }).status === 'number')
@@ -182,7 +202,7 @@ export const platformApi = {
     const cfg = getPlatformConfig();
     const clientId = input.clientId || cfg.cartClientId;
     const url = joinUrl(cfg.baseUrl, `/auth/api/cart/client/${clientId}/items`);
-    return postJson<PlatformApiResponse<any>>(
+    return postJson<PlatformApiResponse<unknown>>(
       url,
       { page: input.page ?? 1, limit: input.limit ?? 250 },
       { signal: input.signal, headers: authHeaders(input.accessToken) }
@@ -272,18 +292,53 @@ export const platformApi = {
     return postJson<PlatformOrderCreateResponse>(url, input.body, { signal: input.signal, headers: authHeaders(input.accessToken) });
   },
 
+  async orderUpdate(input: {
+    accessToken: string;
+    clientId?: string;
+    orderId: string;
+    body: PlatformOrderUpdateRequest;
+    signal?: AbortSignal;
+  }) {
+    const cfg = getPlatformConfig();
+    const clientId = input.clientId || cfg.ordersClientId;
+
+    // Backend implementations vary. Try common patterns and fall back safely.
+    const urlById = joinUrl(cfg.baseUrl, `/auth/api/order/client/${clientId}/order/${input.orderId}`);
+    try {
+      return await tryPutThenPost<PlatformOrderUpdateResponse>(
+        urlById,
+        input.body,
+        { signal: input.signal, headers: authHeaders(input.accessToken) }
+      );
+    } catch (err: unknown) {
+      const status =
+        (err && typeof err === 'object' && 'status' in err && typeof (err as { status?: unknown }).status === 'number')
+          ? (err as { status: number }).status
+          : undefined;
+      if (status !== 404 && status !== 405 && status !== 415) throw err;
+
+      const urlBase = joinUrl(cfg.baseUrl, `/auth/api/order/client/${clientId}/order`);
+      const bodyWithId = { ...input.body, order_id: input.orderId };
+      return tryPutThenPost<PlatformOrderUpdateResponse>(
+        urlBase,
+        bodyWithId,
+        { signal: input.signal, headers: authHeaders(input.accessToken) }
+      );
+    }
+  },
+
   async paymentCredentialsList(input: { accessToken: string; clientId?: string; page?: number; limit?: number; signal?: AbortSignal }) {
     const cfg = getPlatformConfig();
     const clientId = input.clientId || cfg.ordersClientId;
     const base = joinUrl(cfg.baseUrl, `/auth/api/client-payment-credentials/client/${clientId}`);
     const url = withQuery(base, { page: input.page ?? 1, limit: input.limit ?? 10 });
-    return platformFetchJson<PlatformApiResponse<any>>(url, { method: 'GET', signal: input.signal, headers: authHeaders(input.accessToken) });
+    return platformFetchJson<PlatformPaymentCredentialsListResponse>(url, { method: 'GET', signal: input.signal, headers: authHeaders(input.accessToken) });
   },
 
-  async paymentGenerateLink(input: { accessToken: string; clientId?: string; body: any; gateway: string; signal?: AbortSignal }) {
+  async paymentGenerateLink(input: { accessToken: string; clientId?: string; body: PlatformPaymentGenerateLinkRequest; gateway: string; signal?: AbortSignal }) {
     const cfg = getPlatformConfig();
     const clientId = input.clientId || cfg.ordersClientId;
     const url = joinUrl(cfg.baseUrl, `/auth/api/payment-gateway/client/${clientId}/generate/link/${input.gateway}`);
-    return postJson<PlatformApiResponse<any>>(url, input.body, { signal: input.signal, headers: authHeaders(input.accessToken) });
+    return postJson<PlatformPaymentGenerateLinkResponse>(url, input.body, { signal: input.signal, headers: authHeaders(input.accessToken) });
   },
 };

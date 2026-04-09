@@ -5,12 +5,19 @@ import { useCart } from '@/context/CartContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { evaluateCoupon } from '@/lib/coupons';
-import { storageGetJson } from '@/lib/storage';
+import { storageGetJson, storageSetJson } from '@/lib/storage';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { platformApi } from '@/lib/platform/client';
-import type { PlatformUserAddress } from '@/lib/platform/types';
+import type { PlatformPaymentCredential, PlatformUserAddress } from '@/lib/platform/types';
 import { getPlatformConfig } from '@/lib/platform/config';
+
+const getAppOriginForReturnUrl = () => {
+  const env = import.meta.env as unknown as Record<string, unknown>;
+  const raw = typeof env.VITE_APP_ORIGIN === 'string' ? env.VITE_APP_ORIGIN : '';
+  const value = (raw || window.location.origin).trim();
+  return value.replace(/\/+$/, '');
+};
 
 const paymentMethods = [
   { id: 'upi', label: 'UPI', desc: 'Google Pay, PhonePe, Paytm', icon: '📱' },
@@ -18,6 +25,21 @@ const paymentMethods = [
   { id: 'cod', label: 'Cash on Delivery', desc: 'Pay when you receive', icon: '💵' },
   { id: 'wallet', label: 'Wallet', desc: 'Paytm, Amazon Pay', icon: '👛' },
 ];
+
+const toPlatformPaymentMethod = (paymentMode: string) => {
+  switch (paymentMode) {
+    case 'cod':
+      return 'cash';
+    case 'upi':
+      return 'upi';
+    case 'wallet':
+      return 'wallet';
+    case 'card':
+      return 'credit card';
+    default:
+      return paymentMode;
+  }
+};
 
 const addrKey = (a: PlatformUserAddress) =>
   [
@@ -56,7 +78,13 @@ const CheckoutPage = () => {
   });
   const [selectedPayment, setSelectedPayment] = useState('upi');
   const [isProcessing, setIsProcessing] = useState(false);
+  // Legacy QR UI is kept hidden (we now redirect directly to Easebuzz payment_url).
+  const [paymentQrUrl, setPaymentQrUrl] = useState<string | null>(null);
+  const [paymentQrDataUrl, setPaymentQrDataUrl] = useState<string | null>(null);
+  const [paymentQrBusy] = useState(false);
+  const showUpiQr = Boolean(paymentQrUrl);
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const LAST_ORDER_KEY = 'stylora_last_order_v1';
 
   const userQuery = useQuery({
     queryKey: ['platform', 'user', { userId: user?.id }],
@@ -102,12 +130,16 @@ const CheckoutPage = () => {
   }, [appliedCoupon, totalPrice]);
 
   const discount = couponResult?.discountAmount || 0;
-  const deliveryFee = couponResult?.freeShipping ? 0 : (totalPrice > 999 ? 0 : 99);
+  const deliveryFee = 0;
   const finalTotal = Math.max(0, totalPrice - discount + deliveryFee);
   const selectedAddress = savedAddresses.find(a => addrKey(a) === selectedAddressKey) || null;
 
   const orderMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({
+      paymentMode,
+    }: {
+      paymentMode: string;
+    }): Promise<{ redirectUrl: string; orderId?: string | null; paymentRequired: boolean }> => {
       if (!accessToken || !user) throw new Error('Please login first');
       if (!selectedAddress) throw new Error('Please select an address');
 
@@ -149,81 +181,215 @@ const CheckoutPage = () => {
       const billNumber = `INV${generate11Alphanumeric()}`;
       const trackingNumber = `TRK${generate11Alphanumeric()}`;
 
-      const orderRes = await platformApi.orderCreate({
-        accessToken,
-        body: {
-          currency: 'INR',
-          bill_number: billNumber,
-          order_date: toYmd(today),
-          payment_method: selectedPayment,
-          payment_status: 'pending',
-          paid_amount: 0,
-          gst: 0,
-          shipping_fee: deliveryFee,
-          order_status: 'pending',
-          tracking_number: trackingNumber,
-          delivery_date: toYmd(addDays(today, 7)),
-          due_date: toYmd(addDays(today, 1)),
-          price_type: 'regular_price',
-          customer: {
-            first_name: user.firstName,
-            last_name: user.lastName,
-            phone_number: user.phone || '',
-            email: user.email,
-            country_code: '+91',
+      const extractOrderId = (value: unknown): string | undefined => {
+        if (!value) return undefined;
+        if (typeof value === 'string') return value;
+        if (typeof value !== 'object') return undefined;
+        const obj = value as Record<string, unknown>;
+        const direct =
+          (typeof obj.id === 'string' && obj.id) ||
+          (typeof obj.order_id === 'string' && obj.order_id) ||
+          (typeof obj.reference_id === 'string' && obj.reference_id);
+        if (direct) return direct;
+        if (Array.isArray(value) && value.length > 0) return extractOrderId(value[0]);
+        return undefined;
+      };
+
+      const lastOrderBase = {
+        orderId: null as string | null,
+        amount: Math.round(finalTotal),
+        paymentMode,
+        paymentUrl: null as string | null,
+        paymentId: null as string | null,
+        createdAt: new Date().toISOString(),
+      };
+
+      // COD: create the order immediately (no online payment).
+      if (paymentMode === 'cod') {
+        const platformPaymentMethod = toPlatformPaymentMethod(paymentMode);
+        const orderRes = await platformApi.orderCreate({
+          accessToken,
+          body: {
+            currency: 'INR',
+            bill_number: billNumber,
+            order_date: toYmd(today),
+            payment_method: platformPaymentMethod,
+            payment_status: 'pending',
+            paid_amount: 0,
+            gst: 0,
+            shipping_fee: deliveryFee,
+            order_status: 'confirmed',
+            tracking_number: trackingNumber,
+            delivery_date: toYmd(addDays(today, 7)),
+            due_date: toYmd(addDays(today, 1)),
+            price_type: 'regular_price',
+            customer: {
+              first_name: user.firstName,
+              last_name: user.lastName,
+              phone_number: user.phone || '',
+              email: user.email,
+              country_code: '+91',
+            },
+            order_items: orderItems,
+            shipping_address: addr,
+            billing_address: addr,
+            client_id: cfg.ordersClientId,
+            user_id: user.id,
+            created_by: user.id,
+            updated_by: user.id,
+            payment_id: '',
           },
-          order_items: orderItems,
-          shipping_address: addr,
-          billing_address: addr,
-          client_id: cfg.ordersClientId,
-          user_id: user.id,
-          created_by: user.id,
-          updated_by: user.id,
-          payment_id: '',
-        },
-      });
+        });
 
-      const resData = orderRes.data as any;
-      const orderId = resData?.id || resData?.order_id || resData?.reference_id || (Array.isArray(resData) ? resData[0]?.order_id || resData[0]?.id : undefined);
+        const resData: unknown = (orderRes as { data: unknown }).data;
+        const orderId = extractOrderId(resData);
+        storageSetJson(LAST_ORDER_KEY, { ...lastOrderBase, orderId: orderId || null, paymentMode: 'cod' });
 
-      if (selectedPayment !== 'cod' && orderId) {
-        const credsRes = await platformApi.paymentCredentialsList({ accessToken });
-        const dataArr = credsRes.data?.data || credsRes.data || [];
-        const creds = Array.isArray(dataArr) ? dataArr : [];
-        const easebuzzCred = creds.find((c: any) => c.gateway === 'easebuzz') || creds[0];
-
-        if (easebuzzCred) {
-          const retUrl = new URL(window.location.origin + `/order-success?payment_success=true&order_id=${orderId}`);
-          
-          const genRes = await platformApi.paymentGenerateLink({
-            accessToken,
-            gateway: 'easebuzz',
-            body: {
-              amount: finalTotal, // assuming finalTotal is correct amount or backend checks
-              client_id: cfg.ordersClientId,
-              user_id: user.id,
-              payment_credential_id: easebuzzCred.id,
-              provider_id: easebuzzCred.payment_provider_id || easebuzzCred.provider_id,
-              gateway: 'easebuzz',
-              reference_id: orderId,
-              return_url: retUrl.toString(),
-              payment_mode: selectedPayment,
-              requested_by: user.id,
-              date: new Date().toISOString(),
-              type: 'order',
-              payment_id: ''
-            }
-          });
-          
-          const paymentData = genRes.data as any;
-          const urlStr = paymentData?.url || paymentData?.link || paymentData?.payment_url || (typeof paymentData === 'string' && paymentData.startsWith('http') ? paymentData : null);
-          if (urlStr) {
-            return { redirectUrl: urlStr };
-          }
-        }
+        const nextUrl = new URL(getAppOriginForReturnUrl() + `/order-success`);
+        if (orderId) nextUrl.searchParams.set('order_id', String(orderId));
+        nextUrl.searchParams.set('payment_mode', 'cod');
+        nextUrl.searchParams.set('t', String(Date.now()));
+        return { redirectUrl: nextUrl.pathname + nextUrl.search, orderId: orderId ? String(orderId) : null, paymentRequired: false };
       }
 
-      return { redirectUrl: '/order-success' };
+      // Backend requires a real order id to generate the Easebuzz payment link (`order_id not found` otherwise),
+      // so we create the order with pending status first, then redirect to Easebuzz.
+      {
+        const platformPaymentMethod = toPlatformPaymentMethod(paymentMode);
+        const orderRes = await platformApi.orderCreate({
+          accessToken,
+          body: {
+            currency: 'INR',
+            bill_number: billNumber,
+            order_date: toYmd(today),
+            payment_method: platformPaymentMethod,
+            payment_status: 'pending',
+            paid_amount: 0,
+            gst: 0,
+            shipping_fee: deliveryFee,
+            order_status: 'pending',
+            tracking_number: trackingNumber,
+            delivery_date: toYmd(addDays(today, 7)),
+            due_date: toYmd(addDays(today, 1)),
+            price_type: 'regular_price',
+            customer: {
+              first_name: user.firstName,
+              last_name: user.lastName,
+              phone_number: user.phone || '',
+              email: user.email,
+              country_code: '+91',
+            },
+            order_items: orderItems,
+            shipping_address: addr,
+            billing_address: addr,
+            client_id: cfg.ordersClientId,
+            user_id: user.id,
+            created_by: user.id,
+            updated_by: user.id,
+            payment_id: '',
+          },
+        });
+
+        const resData: unknown = (orderRes as { data: unknown }).data;
+        const orderId = extractOrderId(resData);
+        if (!orderId) throw new Error('Order created but order id is missing');
+
+        storageSetJson(LAST_ORDER_KEY, { ...lastOrderBase, orderId, paymentMode });
+
+        const credsRes = await platformApi.paymentCredentialsList({ accessToken, page: 1, limit: 50 });
+
+        const unwrapArray = (value: unknown): PlatformPaymentCredential[] => {
+          if (Array.isArray(value)) return value as PlatformPaymentCredential[];
+          if (value && typeof value === 'object' && 'data' in value) {
+            return unwrapArray((value as { data?: unknown }).data);
+          }
+          return [];
+        };
+
+        const creds = unwrapArray((credsRes as unknown as { data?: unknown })?.data ?? credsRes);
+
+        const gatewayName = (c: PlatformPaymentCredential) => {
+          const rec = c as Record<string, unknown>;
+          const paymentProvider = (rec.paymentProvider && typeof rec.paymentProvider === 'object') ? (rec.paymentProvider as Record<string, unknown>) : null;
+          return String(
+            rec.gateway ??
+              rec.payment_gateway ??
+              rec.gateway_name ??
+              rec.name ??
+              paymentProvider?.provider_name ??
+              paymentProvider?.name ??
+              ''
+          )
+            .trim()
+            .toLowerCase();
+        };
+        const isEasebuzz = (c: PlatformPaymentCredential) => gatewayName(c).includes('easebuzz');
+        const activeEasebuzzCred =
+          creds.find((c) => isEasebuzz(c) && (c.is_active === true || c.is_active === 1)) || null;
+        const easebuzzCred = activeEasebuzzCred || creds.find((c) => isEasebuzz(c)) || null;
+
+        if (!easebuzzCred?.id) {
+          const available = creds.map(gatewayName).filter(Boolean);
+          const hint = available.length ? ` Available gateways: ${available.join(', ')}.` : '';
+          throw new Error(
+            `Easebuzz is not configured for this client.${hint} Check platform payment credentials for client_id=${cfg.ordersClientId} (or set VITE_PLATFORM_ORDERS_CLIENT_ID).`
+          );
+        }
+
+        const providerId = easebuzzCred.payment_provider_id || easebuzzCred.provider_id;
+        if (!providerId) throw new Error('Easebuzz payment provider id missing in credentials');
+
+        const retUrl = new URL(getAppOriginForReturnUrl() + `/order-success`);
+        retUrl.searchParams.set('order_id', String(orderId));
+        retUrl.searchParams.set('payment_mode', String(paymentMode));
+        retUrl.searchParams.set('t', String(Date.now()));
+           
+        const genRes = await platformApi.paymentGenerateLink({
+          accessToken,
+          gateway: 'easebuzz',
+          body: {
+            amount: Math.round(finalTotal),
+            client_id: cfg.ordersClientId,
+            user_id: user.id,
+            payment_credential_id: easebuzzCred.id,
+            provider_id: providerId,
+            gateway: 'easebuzz',
+             reference_id: orderId,
+             return_url: retUrl.toString(),
+             payment_mode: paymentMode,
+             requested_by: user.id,
+             date: new Date().toISOString(),
+             type: 'order',
+             payment_id: '',
+           },
+         });
+
+        const unwrapCandidate = (value: unknown): unknown => {
+          if (!value) return value;
+          if (typeof value !== 'object') return value;
+          if ('data' in (value as Record<string, unknown>)) return (value as Record<string, unknown>).data;
+          return value;
+        };
+
+        const paymentData: unknown = (genRes as unknown as { data?: unknown })?.data;
+        // Backend may return either `{ success, data: {...} }` OR a flat `{ success, payment_url, ... }` object.
+        const candidate = unwrapCandidate(paymentData ?? genRes);
+        const cObj = (candidate && typeof candidate === 'object') ? (candidate as Record<string, unknown>) : null;
+        const urlStr =
+          (typeof cObj?.url === 'string' && cObj.url) ||
+          (typeof cObj?.link === 'string' && cObj.link) ||
+          (typeof cObj?.payment_url === 'string' && cObj.payment_url) ||
+          (typeof candidate === 'string' && candidate ? candidate : null);
+        if (!urlStr) throw new Error('Failed to generate Easebuzz payment link');
+
+        const paymentId =
+          (typeof cObj?.payment_id === 'string' && cObj.payment_id) ||
+          (typeof cObj?.id === 'string' && cObj.id) ||
+          null;
+
+        storageSetJson(LAST_ORDER_KEY, { ...lastOrderBase, orderId, paymentUrl: urlStr, paymentId });
+        return { redirectUrl: urlStr, orderId, paymentRequired: true };
+      }
     },
   });
 
@@ -455,7 +621,37 @@ const CheckoutPage = () => {
                   ))}
                 </div>
 
-                {selectedPayment === 'card' && (
+                {false && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 space-y-3 border border-border rounded-xl p-4">
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <label className="flex-1 flex items-start gap-3 border rounded-lg p-3 cursor-pointer transition-colors border-primary bg-fashion-blush">
+                        <input
+                          type="radio"
+                          name="upi_flow"
+                          checked
+                          readOnly
+                          className="accent-primary mt-1"
+                        />
+                        <div>
+                          <p className="text-sm font-semibold text-foreground font-body">UPI ID (Apps)</p>
+                          <p className="text-xs text-muted-foreground font-body">Pay using Google Pay / PhonePe / Paytm</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground font-body">
+                      Payment is completed on the secure Easebuzz page after you place the order.
+                    </p>
+
+                    {showUpiQr && (
+                      <p className="text-xs text-muted-foreground font-body">
+                        After you place the order, you’ll be redirected to Easebuzz where you can scan a QR to complete payment.
+                      </p>
+                    )}
+                  </motion.div>
+                )}
+
+                {false && (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 space-y-3 border border-border rounded-xl p-4">
                     <input placeholder="Card Number" className="w-full px-4 py-3 border border-border rounded-lg text-sm font-body bg-background outline-none focus:border-primary transition-colors" />
                     <div className="flex gap-3">
@@ -485,7 +681,7 @@ const CheckoutPage = () => {
                     <Truck size={16} className="text-primary" />
                     <span className="text-sm font-semibold text-foreground font-body">Estimated Delivery</span>
                   </div>
-                  <p className="text-sm text-muted-foreground font-body">3-5 business days | Free delivery on orders above ₹999</p>
+                  <p className="text-sm text-muted-foreground font-body">3-5 business days | Free delivery</p>
                 </div>
 
                 {/* Items preview */}
@@ -511,16 +707,22 @@ const CheckoutPage = () => {
                   <button onClick={() => setStep(2)} className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold font-body hover:bg-muted transition-colors">Back</button>
                   <motion.button
                     onClick={async () => {
-                      setIsProcessing(true);
-                      try {
-                        const res = await orderMutation.mutateAsync();
-                        clearCart();
-                        toast.success('Order placed successfully');
-                        if (res.redirectUrl && res.redirectUrl.startsWith('http')) {
-                          window.location.href = res.redirectUrl;
-                        } else {
-                          navigate(res.redirectUrl || '/order-success');
-                        }
+                       setIsProcessing(true);
+                       try {
+                         const res = await orderMutation.mutateAsync({ paymentMode: selectedPayment });
+                         if (!res.paymentRequired) {
+                           clearCart();
+                           toast.success('Order confirmed');
+                         } else {
+                           toast.message('Complete payment to confirm your order');
+                          }
+                           const isExternalUrl = (url: string) => /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url);
+                           if (res.redirectUrl && isExternalUrl(res.redirectUrl)) {
+                             // Open Easebuzz in the same tab/window (required for smooth UPI scan + return_url redirect).
+                             window.location.href = res.redirectUrl;
+                          } else {
+                            navigate(res.redirectUrl || '/order-success');
+                          }
                       } catch (err) {
                         toast.error(err instanceof Error ? err.message : 'Failed to place order');
                       } finally {
@@ -538,6 +740,50 @@ const CheckoutPage = () => {
                     )}
                   </motion.button>
                 </div>
+
+                {paymentQrUrl && (
+                  <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4">
+                    <div className="w-full max-w-md bg-background border border-border rounded-2xl p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="text-lg font-display font-bold text-foreground">Scan to pay</h3>
+                          <p className="text-xs text-muted-foreground font-body mt-1">
+                            Scan this QR from your phone to open the Easebuzz payment page and complete UPI payment.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => { setPaymentQrUrl(null); setPaymentQrDataUrl(null); }}
+                          className="text-sm font-semibold text-muted-foreground hover:text-foreground"
+                        >
+                          Close
+                        </button>
+                      </div>
+
+                      <div className="mt-5 flex items-center justify-center">
+                        <div className="w-[240px] h-[240px] border border-border rounded-xl bg-card flex items-center justify-center">
+                          {paymentQrBusy && <div className="text-sm text-muted-foreground font-body">Generating QRâ€¦</div>}
+                          {!paymentQrBusy && paymentQrDataUrl && <img src={paymentQrDataUrl} alt="Payment QR" className="w-[220px] h-[220px]" />}
+                          {!paymentQrBusy && !paymentQrDataUrl && <div className="text-sm text-muted-foreground font-body">QR unavailable</div>}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 mt-6">
+                        <button
+                          onClick={() => { setPaymentQrUrl(null); setPaymentQrDataUrl(null); }}
+                          className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold font-body hover:bg-muted transition-colors"
+                        >
+                          Done
+                        </button>
+                        <button
+                          onClick={() => { window.location.href = paymentQrUrl; }}
+                          className="flex-1 fashion-gradient text-primary-foreground py-3.5 rounded-xl font-semibold text-sm font-body hover:opacity-90 transition-opacity"
+                        >
+                          Open Payment
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
