@@ -32,11 +32,11 @@ export const getPlatformConfig = (): PlatformConfig => {
   const publicClientId = optionalEnv('VITE_PLATFORM_PUBLIC_CLIENT_ID') || '';
   const categoriesClientId = optionalEnv('VITE_PLATFORM_CATEGORIES_CLIENT_ID') || publicClientId;
   const productsClientId = optionalEnv('VITE_PLATFORM_PRODUCTS_CLIENT_ID') || publicClientId;
-  const productDetailsClientId = optionalEnv('VITE_PLATFORM_PRODUCT_DETAILS_CLIENT_ID') || productsClientId || publicClientId;
+  const productDetailsClientId = optionalEnv('VITE_PLATFORM_PRODUCT_DETAILS_CLIENT_ID') || publicClientId;
   const wishlistClientId = optionalEnv('VITE_PLATFORM_WISHLIST_CLIENT_ID') || publicClientId;
-  const cartClientId = optionalEnv('VITE_PLATFORM_CART_CLIENT_ID') || wishlistClientId || publicClientId;
-  const usersClientId = optionalEnv('VITE_PLATFORM_USERS_CLIENT_ID') || wishlistClientId || publicClientId;
-  const ordersClientId = optionalEnv('VITE_PLATFORM_ORDERS_CLIENT_ID') || productsClientId || publicClientId;
+  const cartClientId = optionalEnv('VITE_PLATFORM_CART_CLIENT_ID') || publicClientId;
+  const usersClientId = optionalEnv('VITE_PLATFORM_USERS_CLIENT_ID') || publicClientId;
+  const ordersClientId = optionalEnv('VITE_PLATFORM_ORDERS_CLIENT_ID') || publicClientId;
 
   if (!baseUrl) throw new Error('Missing required env var: VITE_PLATFORM_BASE_URL');
   if (!categoriesClientId) throw new Error('Missing VITE_PLATFORM_PUBLIC_CLIENT_ID (or VITE_PLATFORM_CATEGORIES_CLIENT_ID)');

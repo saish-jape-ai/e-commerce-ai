@@ -292,6 +292,14 @@ export type PlatformOrderCreateRequest = {
 
 export type PlatformOrderCreateResponse = PlatformApiResponse<unknown>;
 
+// Updating orders isn't documented in this repo; keep it permissive to match backend variations.
+export type PlatformOrderUpdateRequest = Partial<PlatformOrderCreateRequest> & {
+  order_id?: string;
+  id?: string;
+};
+
+export type PlatformOrderUpdateResponse = PlatformApiResponse<unknown>;
+
 export type PlatformOrdersListItem = {
   order_id: string;
   user_id: string;
@@ -305,6 +313,46 @@ export type PlatformOrdersListItem = {
 };
 
 export type PlatformOrdersListResponse = PlatformApiResponse<PlatformOrdersListItem[]>;
+
+export type PlatformPaymentCredential = {
+  id: string;
+  client_id?: string;
+  gateway: string;
+  provider_id?: string | null;
+  payment_provider_id?: string | null;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  // Allow additional backend fields without breaking the app.
+  [k: string]: unknown;
+};
+
+export type PlatformPaymentCredentialsListResponse = PlatformApiResponse<PlatformPaymentCredential[]>;
+
+export type PlatformPaymentGenerateLinkRequest = {
+  amount: number;
+  client_id: string;
+  user_id: string;
+  payment_credential_id: string;
+  provider_id: string;
+  gateway: string;
+  reference_id: string;
+  return_url: string;
+  payment_mode: string;
+  requested_by: string;
+  date: string;
+  type: 'order' | string;
+  payment_id?: string;
+};
+
+export type PlatformPaymentGenerateLinkData = {
+  url?: string;
+  link?: string;
+  payment_url?: string;
+  [k: string]: unknown;
+};
+
+export type PlatformPaymentGenerateLinkResponse = PlatformApiResponse<PlatformPaymentGenerateLinkData | string | unknown>;
 
 export type PlatformProductDetailVariant = {
   sku: string | null;
