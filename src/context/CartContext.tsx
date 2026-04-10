@@ -224,7 +224,58 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [accessToken, isAuthed, queryClient]);
 
-  const clearCart = useCallback(() => setItems([]), []);
+  const clearCart = useCallback(() => {
+    storageSetJson("stylora_cart_v1", []);
+    setItems([]);
+
+    if (!accessToken) {
+      return;
+    }
+
+    const knownIds = items.map(i => i.platformCartItemId).filter(Boolean) as string[];
+
+    const unwrapArray = (value: unknown): any[] => {
+      if (Array.isArray(value)) return value as any[];
+      if (value && typeof value === 'object' && 'data' in value) {
+        return unwrapArray((value as { data?: unknown }).data);
+      }
+      return [];
+    };
+
+    const collectCartItemIds = (carts: any[]) => {
+      const ids: string[] = [];
+      for (const cart of carts) {
+        const cartItems = cart?.items || [];
+        for (const item of cartItems) {
+          const cartItemIds = Array.isArray(item?.cart_item_ids) ? item.cart_item_ids : [];
+          for (const id of cartItemIds) {
+            if (typeof id === 'string' && id) ids.push(id);
+          }
+        }
+      }
+      return Array.from(new Set(ids));
+    };
+
+    (async () => {
+      try {
+        let idsToDelete = Array.from(new Set(knownIds));
+
+        if (idsToDelete.length === 0) {
+          const res = await platformApi.cartList({ accessToken, page: 1, limit: 250 });
+          const carts = unwrapArray((res as unknown as { data?: unknown })?.data ?? res);
+          idsToDelete = collectCartItemIds(carts);
+        }
+
+        if (idsToDelete.length > 0) {
+          await platformApi.cartDeleteItems({ accessToken, cartItemIds: idsToDelete });
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['platform', 'cart'] });
+      } catch {
+        // Best-effort: cart may already be cleared server-side.
+      }
+    })();
+  }, [accessToken, items, queryClient]);
 
   const toggleWishlist = useCallback((productId: string, meta?: { platformProductId?: string; platformVariantId?: string | null }) => {
     if (!isAuthed) return;

@@ -2,7 +2,8 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
 const RedirectIfAuthed = ({ children }: { children: JSX.Element }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isReady } = useAuth();
+  if (!isReady) return null;
   if (isAuthenticated) return <Navigate to="/profile" replace />;
   return children;
 };

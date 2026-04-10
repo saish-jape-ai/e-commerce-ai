@@ -75,7 +75,14 @@ const AppRoutes = () => {
             <Route path="/search" element={<Page><SearchPage /></Page>} />
             <Route path="/contact" element={<Page><ContactPage /></Page>} />
             <Route path="/about" element={<Page><AboutPage /></Page>} />
-            <Route path="/track-order" element={<Page><OrderTrackingPage /></Page>} />
+            <Route
+              path="/track-order"
+              element={
+                <RequireAuth>
+                  <Page><OrderTrackingPage /></Page>
+                </RequireAuth>
+              }
+            />
             <Route
               path="/settings"
               element={

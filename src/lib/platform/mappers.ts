@@ -1,5 +1,5 @@
 import type { Product } from '@/data/products';
-import type { PlatformProduct, PlatformProductDetail } from './types';
+import type { PlatformBestSellerItem, PlatformProduct, PlatformProductDetail } from './types';
 
 const stripHtml = (value: string) => value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -9,6 +9,44 @@ const placeholderImage = (seed: string) =>
 const pickMasterVariant = (p: PlatformProduct) => p.variants.find(v => v.is_master_variant) || p.variants[0];
 
 const uniq = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
+
+export const platformBestSellerToUiProduct = (item: PlatformBestSellerItem): Product => {
+  const productId = item.product?.id || `best-${Math.random().toString(36).slice(2)}`;
+  const variantId = item.variant?.id ?? null;
+
+  const price = item.variant?.regular_price ?? item.variant?.member_price ?? 0;
+  const originalPrice = item.variant?.market_price ?? item.variant?.regular_price ?? price;
+  const discount = originalPrice > 0 ? Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100)) : 0;
+
+  const productImages = (item.product?.media || []).map(m => m.media_url);
+  const variantImages = (item.variant?.media || []).map(m => m.media_url);
+  const images = uniq([...productImages, ...variantImages]);
+  const image = images[0] || placeholderImage(productId);
+
+  return {
+    id: productId,
+    name: item.product?.name || 'Product',
+    brand: 'Best Seller',
+    price,
+    originalPrice,
+    discount,
+    image,
+    images: images.length ? images : undefined,
+    category: 'Other',
+    subcategory: 'All',
+    gender: 'unisex',
+    sizes: ['Default'],
+    colors: ['Default'],
+    rating: 0,
+    reviews: 0,
+    description: 'â€”',
+    tags: ['Best Seller'],
+    isNew: false,
+    isTrending: discount >= 30,
+    platformProductId: productId,
+    platformVariantId: variantId,
+  };
+};
 
 export const platformProductToUiProduct = (p: PlatformProduct): Product => {
   const variant = pickMasterVariant(p);

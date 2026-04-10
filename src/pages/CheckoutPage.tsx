@@ -204,6 +204,47 @@ const CheckoutPage = () => {
         createdAt: new Date().toISOString(),
       };
 
+      const clearServerCartBestEffort = async () => {
+        try {
+          const knownIds = items.map(i => i.platformCartItemId).filter(Boolean) as string[];
+
+          const unwrapArray = (value: unknown): any[] => {
+            if (Array.isArray(value)) return value as any[];
+            if (value && typeof value === 'object' && 'data' in value) {
+              return unwrapArray((value as { data?: unknown }).data);
+            }
+            return [];
+          };
+
+          const collectCartItemIds = (carts: any[]) => {
+            const ids: string[] = [];
+            for (const cart of carts) {
+              const cartItems = cart?.items || [];
+              for (const item of cartItems) {
+                const cartItemIds = Array.isArray(item?.cart_item_ids) ? item.cart_item_ids : [];
+                for (const id of cartItemIds) {
+                  if (typeof id === 'string' && id) ids.push(id);
+                }
+              }
+            }
+            return Array.from(new Set(ids));
+          };
+
+          let idsToDelete = Array.from(new Set(knownIds));
+          if (idsToDelete.length === 0) {
+            const res = await platformApi.cartList({ accessToken, page: 1, limit: 250 });
+            const carts = unwrapArray((res as unknown as { data?: unknown })?.data ?? res);
+            idsToDelete = collectCartItemIds(carts);
+          }
+
+          if (idsToDelete.length > 0) {
+            await platformApi.cartDeleteItems({ accessToken, cartItemIds: idsToDelete });
+          }
+        } catch {
+          // Best-effort: cart may already be cleared server-side.
+        }
+      };
+
       // COD: create the order immediately (no online payment).
       if (paymentMode === 'cod') {
         const platformPaymentMethod = toPlatformPaymentMethod(paymentMode);
@@ -244,6 +285,7 @@ const CheckoutPage = () => {
         const resData: unknown = (orderRes as { data: unknown }).data;
         const orderId = extractOrderId(resData);
         storageSetJson(LAST_ORDER_KEY, { ...lastOrderBase, orderId: orderId || null, paymentMode: 'cod' });
+        await clearServerCartBestEffort();
 
         const nextUrl = new URL(getAppOriginForReturnUrl() + `/order-success`);
         if (orderId) nextUrl.searchParams.set('order_id', String(orderId));
@@ -388,6 +430,7 @@ const CheckoutPage = () => {
           null;
 
         storageSetJson(LAST_ORDER_KEY, { ...lastOrderBase, orderId, paymentUrl: urlStr, paymentId });
+        await clearServerCartBestEffort();
         return { redirectUrl: urlStr, orderId, paymentRequired: true };
       }
     },
@@ -709,18 +752,20 @@ const CheckoutPage = () => {
                     onClick={async () => {
                        setIsProcessing(true);
                        try {
-                         const res = await orderMutation.mutateAsync({ paymentMode: selectedPayment });
-                         if (!res.paymentRequired) {
-                           clearCart();
-                           toast.success('Order confirmed');
-                         } else {
-                           toast.message('Complete payment to confirm your order');
-                          }
-                           const isExternalUrl = (url: string) => /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url);
-                           if (res.redirectUrl && isExternalUrl(res.redirectUrl)) {
-                             // Open Easebuzz in the same tab/window (required for smooth UPI scan + return_url redirect).
-                             window.location.href = res.redirectUrl;
+                          const res = await orderMutation.mutateAsync({ paymentMode: selectedPayment });
+                          // Order is created at this point for both COD and online payments.
+                          // Clear the bag so items don't remain after completing non-COD flows.
+                          clearCart();
+                          if (!res.paymentRequired) {
+                            toast.success('Order confirmed');
                           } else {
+                            toast.message('Redirecting to payment');
+                          }
+                            const isExternalUrl = (url: string) => /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url);
+                            if (res.redirectUrl && isExternalUrl(res.redirectUrl)) {
+                              // Open Easebuzz in the same tab/window (required for smooth UPI scan + return_url redirect).
+                              window.location.href = res.redirectUrl;
+                           } else {
                             navigate(res.redirectUrl || '/order-success');
                           }
                       } catch (err) {

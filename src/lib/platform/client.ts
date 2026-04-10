@@ -12,6 +12,8 @@ import type {
   PlatformOrderCreateResponse,
   PlatformOrderUpdateRequest,
   PlatformOrderUpdateResponse,
+  PlatformOrderTimelineResponse,
+  PlatformBestSellersResponse,
   PlatformPaymentCredentialsListResponse,
   PlatformPaymentGenerateLinkRequest,
   PlatformPaymentGenerateLinkResponse,
@@ -327,12 +329,30 @@ export const platformApi = {
     }
   },
 
+  async orderTimeline(input: { accessToken: string; clientId?: string; orderId: string; signal?: AbortSignal }) {
+    const cfg = getPlatformConfig();
+    const clientId = input.clientId || cfg.ordersClientId;
+    const url = joinUrl(cfg.baseUrl, `/auth/api/order/client/${clientId}/order/${input.orderId}/order-timeline`);
+    return platformFetchJson<PlatformOrderTimelineResponse>(url, {
+      method: 'GET',
+      signal: input.signal,
+      headers: { ...authHeaders(input.accessToken), 'Content-Type': 'application/json' },
+    });
+  },
+
   async paymentCredentialsList(input: { accessToken: string; clientId?: string; page?: number; limit?: number; signal?: AbortSignal }) {
     const cfg = getPlatformConfig();
     const clientId = input.clientId || cfg.ordersClientId;
     const base = joinUrl(cfg.baseUrl, `/auth/api/client-payment-credentials/client/${clientId}`);
     const url = withQuery(base, { page: input.page ?? 1, limit: input.limit ?? 10 });
     return platformFetchJson<PlatformPaymentCredentialsListResponse>(url, { method: 'GET', signal: input.signal, headers: authHeaders(input.accessToken) });
+  },
+
+  async publicBestSellers(input?: { clientId?: string; signal?: AbortSignal }) {
+    const cfg = getPlatformConfig();
+    const clientId = input?.clientId || cfg.publicClientId;
+    const url = joinUrl(cfg.baseUrl, `/auth/api/public/client/${clientId}/best-sellers`);
+    return postJson<PlatformBestSellersResponse>(url, {}, { signal: input?.signal });
   },
 
   async paymentGenerateLink(input: { accessToken: string; clientId?: string; body: PlatformPaymentGenerateLinkRequest; gateway: string; signal?: AbortSignal }) {
