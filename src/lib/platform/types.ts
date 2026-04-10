@@ -314,6 +314,20 @@ export type PlatformOrdersListItem = {
 
 export type PlatformOrdersListResponse = PlatformApiResponse<PlatformOrdersListItem[]>;
 
+export type PlatformOrderTimelineEntry = {
+  id: string;
+  order_id: string;
+  status: string;
+  timestamp: string;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type PlatformOrderTimelineResponse = PlatformApiResponse<PlatformOrderTimelineEntry[]>;
+
 export type PlatformPaymentCredential = {
   id: string;
   client_id?: string;
@@ -353,6 +367,40 @@ export type PlatformPaymentGenerateLinkData = {
 };
 
 export type PlatformPaymentGenerateLinkResponse = PlatformApiResponse<PlatformPaymentGenerateLinkData | string | unknown>;
+
+export type PlatformBestSellerProduct = {
+  id: string;
+  name: string;
+  media?: Array<{
+    id: string;
+    media_url: string;
+    media_type: string;
+    thumbnail_url: string | null;
+  }>;
+};
+
+export type PlatformBestSellerVariant = {
+  id: string;
+  sku: string | null;
+  media?: Array<{
+    id: string;
+    media_url: string;
+    media_type: string;
+    thumbnail_url: string | null;
+  }>;
+  buying_price: number | null;
+  market_price: number | null;
+  member_price: number | null;
+  regular_price: number | null;
+};
+
+export type PlatformBestSellerItem = {
+  best_selling_count: string;
+  product: PlatformBestSellerProduct;
+  variant: PlatformBestSellerVariant;
+};
+
+export type PlatformBestSellersResponse = PlatformApiResponse<PlatformBestSellerItem[]>;
 
 export type PlatformProductDetailVariant = {
   sku: string | null;

@@ -166,7 +166,16 @@ const ProfilePage = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.1 }}
-                    className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow"
+                    onClick={() => navigate(`/track-order?order_id=${encodeURIComponent(order.order_id)}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/track-order?order_id=${encodeURIComponent(order.order_id)}`);
+                      }
+                    }}
+                    className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer"
                   >
                     <div className="flex items-center gap-4">
                       <img

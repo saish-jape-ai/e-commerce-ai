@@ -23,6 +23,7 @@ interface AuthContextType {
   user: AuthUser | null;
   accessToken: string | null;
   isAuthenticated: boolean;
+  isReady: boolean;
   signup: (input: { name: string; email: string; phone?: string; password: string }) => Promise<void>;
   login: (input: { email: string; password: string }) => Promise<void>;
   logout: () => void;
@@ -37,10 +38,12 @@ const writeSession = (session: StoredSession | null) => storageSetJson(SESSION_K
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<StoredSession | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const stored = readSession();
     if (stored?.accessToken && stored?.user) setSession(stored);
+    setIsReady(true);
   }, []);
 
   const signup = useCallback(async () => {
@@ -86,10 +89,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user: session?.user ?? null,
     accessToken: session?.accessToken ?? null,
     isAuthenticated: Boolean(session?.accessToken),
+    isReady,
     signup,
     login,
     logout,
-  }), [login, logout, session, signup]);
+  }), [isReady, login, logout, session, signup]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

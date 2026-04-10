@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, ArrowRight, Sparkles, Truck, RotateCcw, Shield, Tag, Star, TrendingUp } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import { usePlatformCategories, usePlatformProducts } from '@/hooks/usePlatformCatalog';
+import { usePlatformBestSellers, usePlatformCategories, usePlatformProducts } from '@/hooks/usePlatformCatalog';
 import hero1 from '@/assets/hero-1.jpg';
 import hero2 from '@/assets/hero-2.jpg';
 import hero3 from '@/assets/hero-3.jpg';
@@ -31,6 +31,7 @@ const Homepage = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const productsQuery = usePlatformProducts({ k: '', limit: 80, offset: 0 });
   const categoriesQuery = usePlatformCategories();
+  const bestSellersQuery = usePlatformBestSellers();
   const categoryScrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (direction: 'left' | 'right') => {
@@ -55,10 +56,13 @@ const Homepage = () => {
     return (arr.length > 0 ? arr : [...products].reverse()).slice(0, 12);
   }, [products]);
 
-  const bestSellers = useMemo(() => {
+  const bestSellersFallback = useMemo(() => {
     const arr = products.filter(p => p.tags.some(t => t.toLowerCase() === 'bestseller' || t.toLowerCase() === 'best seller'));
     return (arr.length > 0 ? arr : [...products].reverse()).slice(0, 8);
   }, [products]);
+
+  const bestSellersFromApi = useMemo(() => bestSellersQuery.data?.ui ?? [], [bestSellersQuery.data]);
+  const bestSellers = useMemo(() => (bestSellersFromApi.length ? bestSellersFromApi.slice(0, 8) : bestSellersFallback), [bestSellersFromApi, bestSellersFallback]);
   const ethnicWear = useMemo(() => products.filter(p => p.category.toLowerCase() === 'ethnic').slice(0, 4), [products]);
   const beautyProducts = useMemo(() => products.filter(p => p.category.toLowerCase() === 'beauty').slice(0, 4), [products]);
 
@@ -254,6 +258,9 @@ const Homepage = () => {
           </div>
           <Link to="/products" className="text-sm font-semibold text-primary hover:underline font-body">View All →</Link>
         </div>
+        {bestSellersQuery.isLoading && (
+          <div className="text-sm text-muted-foreground font-body mb-4">Loading best sellersâ€¦</div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {bestSellers.map((product, i) => (
             <ProductCard key={product.id} product={product} index={i} />

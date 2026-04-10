@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { platformApi } from '@/lib/platform/client';
-import { platformProductDetailToUiProduct, platformProductToUiProduct } from '@/lib/platform/mappers';
-import type { PlatformCategory, PlatformProduct, PlatformProductDetail, PlatformSubcategory } from '@/lib/platform/types';
+import { platformBestSellerToUiProduct, platformProductDetailToUiProduct, platformProductToUiProduct } from '@/lib/platform/mappers';
+import type { PlatformBestSellerItem, PlatformCategory, PlatformProduct, PlatformProductDetail, PlatformSubcategory } from '@/lib/platform/types';
 import type { Product } from '@/data/products';
 
 export const platformQueryKeys = {
@@ -10,6 +10,7 @@ export const platformQueryKeys = {
   subcategories: (input: { categoryId: string; clientId?: string }) => ['platform', 'subcategories', input] as const,
   products: (input: { k: string; clientId?: string; limit?: number; offset?: number; categoryId?: string; subcategoryId?: string }) => ['platform', 'products', input] as const,
   productDetail: (input: { productId: string; clientId?: string }) => ['platform', 'product', input] as const,
+  bestSellers: (input: { clientId?: string }) => ['platform', 'best-sellers', input] as const,
 };
 
 export const usePlatformCategories = (input?: { k?: string; clientId?: string; limit?: number; offset?: number }) => {
@@ -80,6 +81,34 @@ export const usePlatformCategoryOptions = (categories?: PlatformCategory[]) => {
     uniq.sort((a, b) => a.localeCompare(b));
     return uniq;
   }, [categories]);
+};
+
+export type PlatformBestSellersResult = {
+  raw: PlatformBestSellerItem[];
+  ui: Product[];
+  totalCount?: number;
+  totalPages?: number;
+  currentPage?: number;
+  limit?: number;
+};
+
+export const usePlatformBestSellers = (input?: { clientId?: string }): UseQueryResult<PlatformBestSellersResult> => {
+  return useQuery({
+    queryKey: platformQueryKeys.bestSellers({ clientId: input?.clientId }),
+    queryFn: async ({ signal }) => {
+      const res = await platformApi.publicBestSellers({ clientId: input?.clientId, signal });
+      const raw = res.data ?? [];
+      return {
+        raw,
+        ui: raw.map(platformBestSellerToUiProduct),
+        totalCount: res.total_count,
+        totalPages: res.total_pages,
+        currentPage: res.current_page,
+        limit: res.limit,
+      };
+    },
+    staleTime: 1000 * 30,
+  });
 };
 
 export const usePlatformProductDetail = (productId: string | undefined, input?: { clientId?: string; k?: string }) => {
